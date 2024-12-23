@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
 	"github.com/google/uuid"
+	vshardrouter "github.com/tarantool/go-vshard-router"
 	"go.etcd.io/etcd/client/v2"
 )
 

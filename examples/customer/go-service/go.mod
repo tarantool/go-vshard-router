@@ -3,7 +3,7 @@ module customer
 go 1.22.2
 
 require (
-	github.com/KaymeKaydex/go-vshard-router v0.0.9
+	github.com/tarantool/go-vshard-router v0.0.9
 	github.com/google/uuid v1.6.0
 	github.com/spf13/viper v1.18.2
 	github.com/swaggo/swag v1.16.3
@@ -49,4 +49,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/KaymeKaydex/go-vshard-router v0.0.9 => ../../../
+replace github.com/tarantool/go-vshard-router v0.0.9 => ../../../

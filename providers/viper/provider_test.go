@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	vprovider "github.com/KaymeKaydex/go-vshard-router/providers/viper"
+	vprovider "github.com/tarantool/go-vshard-router/providers/viper"
 )
 
 func TestProvider_Close(t *testing.T) {

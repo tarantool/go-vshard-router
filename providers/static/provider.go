@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
+	vshardrouter "github.com/tarantool/go-vshard-router"
 )
 
 // Check that provider implements TopologyProvider interface

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
-	"github.com/KaymeKaydex/go-vshard-router/providers/static"
 	"github.com/stretchr/testify/require"
+	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-vshard-router/providers/static"
 )
 
 func TestTopology(t *testing.T) {

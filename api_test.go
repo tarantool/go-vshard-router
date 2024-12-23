@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	mockpool "github.com/KaymeKaydex/go-vshard-router/mocks/pool"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-tarantool/v2"
+	mockpool "github.com/tarantool/go-vshard-router/mocks/pool"
 )
 
 var emptyRouter = &Router{

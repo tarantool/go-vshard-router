@@ -20,7 +20,7 @@ var (
 	ErrTopologyProvider    = fmt.Errorf("got error from topology provider")
 )
 
-// This data struct is instroduced by https://github.com/KaymeKaydex/go-vshard-router/issues/39.
+// This data struct is instroduced by https://github.com/tarantool/go-vshard-router/issues/39.
 // We use an array of atomics to lock-free handling elements of routeMap.
 // knownBucketCount reflects a statistic over routeMap.
 // knownBucketCount might be inconsistent for a few mksecs, because at first we change routeMap[bucketID],

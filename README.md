@@ -2,14 +2,14 @@
 
 <img align="right" width="159px" src="docs/static/logo.png" alt="логотип go vshard router">
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/KaymeKaydex/go-vshard-router.svg)](https://pkg.go.dev/github.com/KaymeKaydex/go-vshard-router)
+[![Go Reference](https://pkg.go.dev/badge/github.com/tarantool/go-vshard-router.svg)](https://pkg.go.dev/github.com/tarantool/go-vshard-router)
 [![Actions Status][actions-badge]][actions-url]
-[![Go Report Card](https://goreportcard.com/badge/github.com/KaymeKaydex/go-vshard-router)](https://goreportcard.com/report/github.com/KaymeKaydex/go-vshard-router)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tarantool/go-vshard-router)](https://goreportcard.com/report/github.com/tarantool/go-vshard-router)
 [![codecov](https://codecov.io/gh/KaymeKaydex/go-vshard-router/graph/badge.svg?token=WLRWE97IT1)](https://codecov.io/gh/KaymeKaydex/go-vshard-router)
 [![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/KaymeKaydex/go-vshard-router/master/LICENSE)
 
 Translations:
-- [Русский](https://github.com/KaymeKaydex/go-vshard-router/blob/main/README_ru.md)
+- [Русский](https://github.com/tarantool/go-vshard-router/blob/main/README_ru.md)
 
 
 go-vshard-router is a library for sending requests to a sharded tarantool cluster directly,
@@ -71,14 +71,14 @@ graph TD
 With [Go module](https://github.com/golang/go/wiki/Modules) support, simply add the following import
 
 ```
-import "github.com/KaymeKaydex/go-vshard-router"
+import "github.com/tarantool/go-vshard-router"
 ```
 to your code, and then `go [build|run|test]` will automatically fetch the necessary dependencies.
 
 Otherwise, run the following Go command to install the `go-vshard-router` package:
 
 ```sh
-$ go get -u github.com/KaymeKaydex/go-vshard-router
+$ go get -u github.com/tarantool/go-vshard-router
 ```
 
 ### Running Go-Vshard-Router
@@ -94,8 +94,8 @@ import (
   "strconv"
   "time"
 
-  vshardrouter "github.com/KaymeKaydex/go-vshard-router"
-  "github.com/KaymeKaydex/go-vshard-router/providers/static"
+  vshardrouter "github.com/tarantool/go-vshard-router"
+  "github.com/tarantool/go-vshard-router/providers/static"
 
   "github.com/google/uuid"
   "github.com/tarantool/go-tarantool/v2"
@@ -215,5 +215,5 @@ at a load close to production
   ![Image alt](docs/static/not-direct.png)
 
 
-[actions-badge]: https://github.com/KaymeKaydex/go-vshard-router/actions/workflows/main.yml/badge.svg
-[actions-url]: https://github.com/KaymeKaydex/go-vshard-router/actions/workflows/main.yml
+[actions-badge]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml/badge.svg
+[actions-url]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml

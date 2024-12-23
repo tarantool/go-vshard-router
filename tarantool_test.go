@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
-	"github.com/KaymeKaydex/go-vshard-router/providers/static"
-	chelper "github.com/KaymeKaydex/go-vshard-router/test_helper"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
 	"github.com/tarantool/go-tarantool/v2/test_helpers"
+	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-vshard-router/providers/static"
+	chelper "github.com/tarantool/go-vshard-router/test_helper"
 )
 
 const instancesCount = 4

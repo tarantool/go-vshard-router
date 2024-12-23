@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
 	"github.com/stretchr/testify/require"
+	vshardrouter "github.com/tarantool/go-vshard-router"
 )
 
 type concurrentTopologyProvider struct {
@@ -35,7 +35,7 @@ func (c *concurrentTopologyProvider) Init(tc vshardrouter.TopologyController) er
 		defer close(c.closed)
 		//nolint:errcheck
 		defer tc.AddReplicasets(ctx, removed)
-		// Hack until issue will be resolved: https://github.com/KaymeKaydex/go-vshard-router/issues/65
+		// Hack until issue will be resolved: https://github.com/tarantool/go-vshard-router/issues/65
 		// A little pause to let finish NewRouter() with no err
 		time.Sleep(2 * time.Second)
 

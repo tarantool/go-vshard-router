@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	mockpool "github.com/KaymeKaydex/go-vshard-router/mocks/pool"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	mockpool "github.com/tarantool/go-vshard-router/mocks/pool"
 )
 
 func TestRouter_Topology(t *testing.T) {

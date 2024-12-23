@@ -231,7 +231,7 @@ func (r VshardRouterCallResp) GetTyped(result []interface{}) error {
 // RouterCallImpl Perform shard operation function will restart operation
 // after wrong bucket response until timeout is reached
 // Deprecated: RouterCallImpl is deprecated.
-// See https://github.com/KaymeKaydex/go-vshard-router/issues/110.
+// See https://github.com/tarantool/go-vshard-router/issues/110.
 // Use Call method with RO, RW, RE, BRO, BRE modes instead.
 func (r *Router) RouterCallImpl(ctx context.Context,
 	bucketID uint64,
