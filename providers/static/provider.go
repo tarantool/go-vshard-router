@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
-
 	vshardrouter "github.com/tarantool/go-vshard-router"
 )
 
@@ -33,11 +31,6 @@ func (p *Provider) Validate() error {
 		// check replicaset name
 		if rs.Name == "" {
 			return fmt.Errorf("one of replicaset name is empty")
-		}
-
-		// check replicaset uuid
-		if rs.UUID == uuid.Nil {
-			return fmt.Errorf("one of replicaset uuid is empty")
 		}
 	}
 

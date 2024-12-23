@@ -1,4 +1,19 @@
-## Unreleased
+## v1.3.1
+
+REFACTOR:
+
+* Change already exists rs error "replicaset exists" to "replicaset already exists".
+* Rewrite some comments to en.
+
+FEATURES:
+
+* Added viper tarantool3 topology provider implementation.
+
+EXAMPLES:
+
+* Logger usage in customer example fixed.
+
+## v1.3.0
 
 BUG FIXES:
 * Fix decoding fields for StorageCallVShardError (MasterUUID, ReplicasetUUID).

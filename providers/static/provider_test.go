@@ -70,7 +70,7 @@ func TestProvider_Validate(t *testing.T) {
 					vshardrouter.InstanceInfo{},
 				},
 			},
-			IsErr: true,
+			IsErr: false, // uuid is not required. tarantool3 have an only alias support.
 		},
 		{
 			Name: "valid",

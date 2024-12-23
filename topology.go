@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	ErrReplicasetExists    = fmt.Errorf("replicaset exists")
+	ErrReplicasetExists    = fmt.Errorf("replicaset already exists")
 	ErrReplicasetNotExists = fmt.Errorf("replicaset not exists")
 )
 
