@@ -12,7 +12,7 @@ import (
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/vmihailenco/msgpack/v5"
 
-	mockpool "github.com/KaymeKaydex/go-vshard-router/mocks/pool"
+	mockpool "github.com/tarantool/go-vshard-router/mocks/pool"
 )
 
 func TestReplicasetInfo_String(t *testing.T) {

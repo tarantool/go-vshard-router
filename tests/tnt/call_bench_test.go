@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
-	"github.com/KaymeKaydex/go-vshard-router/providers/static"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
+	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-vshard-router/providers/static"
 )
 
 type Product struct {

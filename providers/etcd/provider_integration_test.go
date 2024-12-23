@@ -5,7 +5,7 @@ package etcd
 
 import (
 	"fmt"
-	mocktopology "github.com/KaymeKaydex/go-vshard-router/mocks/topology"
+	mocktopology "github.com/tarantool/go-vshard-router/mocks/topology"
 	"go.etcd.io/etcd/client/v2"
 	"testing"
 	"time"

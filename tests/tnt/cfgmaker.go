@@ -3,8 +3,8 @@ package tnt
 import (
 	"fmt"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
 	"github.com/google/uuid"
+	vshardrouter "github.com/tarantool/go-vshard-router"
 )
 
 type cfgmaker struct {

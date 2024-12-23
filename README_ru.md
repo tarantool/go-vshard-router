@@ -2,13 +2,13 @@
 
 <img align="right" width="159px" src="docs/static/logo.png" alt="go vshard router logo">
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/KaymeKaydex/go-vshard-router.svg)](https://pkg.go.dev/github.com/KaymeKaydex/go-vshard-router)
+[![Go Reference](https://pkg.go.dev/badge/github.com/tarantool/go-vshard-router.svg)](https://pkg.go.dev/github.com/tarantool/go-vshard-router)
 [![Actions Status][actions-badge]][actions-url]
-[![Go Report Card](https://goreportcard.com/badge/github.com/KaymeKaydex/go-vshard-router)](https://goreportcard.com/report/github.com/KaymeKaydex/go-vshard-router)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tarantool/go-vshard-router)](https://goreportcard.com/report/github.com/tarantool/go-vshard-router)
 [![codecov](https://codecov.io/gh/KaymeKaydex/go-vshard-router/graph/badge.svg?token=WLRWE97IT1)](https://codecov.io/gh/KaymeKaydex/go-vshard-router)
 
 Translations:
-- [English](https://github.com/KaymeKaydex/go-vshard-router/blob/main/README.md)
+- [English](https://github.com/tarantool/go-vshard-router/blob/main/README.md)
 
 go-vshard-router — библиотека для отправки запросов напрямую в стораджа в шардированный кластер tarantool,
 без использования tarantool-router.  Эта библиотека написана на основе [модуля библиотеки tarantool vhsard router](https://github.com/tarantool/vshard/blob/master/vshard/router/init.lua). go-vshard-router применяет новый подход к созданию кластера
@@ -70,14 +70,14 @@ graph TD
 С помощью [Go module](https://github.com/golang/go/wiki/Modules) можно добавить следующий импорт
 
 ```
-import "github.com/KaymeKaydex/go-vshard-router"
+import "github.com/tarantool/go-vshard-router"
 ```
 в ваш код, а затем `go [build|run|test]` автоматически получит необходимые зависимости.
 
 
 В противном случае выполните следующую команду Go, чтобы установить пакет go-vshard-router:
 ```sh
-$ go get -u github.com/KaymeKaydex/go-vshard-router
+$ go get -u github.com/tarantool/go-vshard-router
 ```
 
 ### Использование Go-Vshard-Router
@@ -93,8 +93,8 @@ import (
 	"strconv"
 	"time"
 
-	vshardrouter "github.com/KaymeKaydex/go-vshard-router"
-	"github.com/KaymeKaydex/go-vshard-router/providers/static"
+	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-vshard-router/providers/static"
 
 	"github.com/google/uuid"
 	"github.com/tarantool/go-tarantool/v2"
@@ -216,5 +216,5 @@ func main() {
   ![Image alt](docs/static/not-direct.png)
 
 
-[actions-badge]: https://github.com/KaymeKaydex/go-vshard-router/actions/workflows/main.yml/badge.svg
-[actions-url]: https://github.com/KaymeKaydex/go-vshard-router/actions/workflows/main.yml
+[actions-badge]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml/badge.svg
+[actions-url]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml

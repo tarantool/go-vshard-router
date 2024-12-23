@@ -123,7 +123,7 @@ func bucketStatWait(future *tarantool.Future) (BucketStatInfo, error) {
 // link https://github.com/tarantool/vshard/blob/99ceaee014ea3a67424c2026545838e08d69b90c/vshard/replicaset.lua#L661
 // Deprecated: ReplicaCall is deprecated,
 // because looks like it has a little bit broken interface.
-// See https://github.com/KaymeKaydex/go-vshard-router/issues/42.
+// See https://github.com/tarantool/go-vshard-router/issues/42.
 // Use CallAsync instead.
 func (rs *Replicaset) ReplicaCall(
 	ctx context.Context,
