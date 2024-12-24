@@ -3,85 +3,68 @@ package viper
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
 
 	"github.com/google/uuid"
 	srcviper "github.com/spf13/viper"
-
 	vshardrouter "github.com/tarantool/go-vshard-router"
+	"github.com/tarantool/go-vshard-router/providers/viper/moonlibs"
+	"github.com/tarantool/go-vshard-router/providers/viper/tarantool3"
 )
 
 // Check that provider implements TopologyProvider interface
 var _ vshardrouter.TopologyProvider = (*Provider)(nil)
 
 type Provider struct {
+	ctx context.Context
+
 	v  *srcviper.Viper
 	rs map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo
 }
 
-func NewProvider(v *srcviper.Viper) *Provider {
+type ConfigType int
+
+const (
+	ConfigTypeMoonlibs ConfigType = iota
+	ConfigTypeTarantool3
+)
+
+type Convertable interface {
+	Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo
+}
+
+func NewProvider(ctx context.Context, v *srcviper.Viper, cfgType ConfigType) *Provider {
 	if v == nil {
 		panic("viper entity is nil")
 	}
 
-	cfg := &TopologyConfig{}
+	var cfg Convertable
+
+	switch cfgType {
+	case ConfigTypeMoonlibs:
+		cfg = &moonlibs.Config{}
+	case ConfigTypeTarantool3:
+		cfg = &tarantool3.Config{}
+	default:
+		panic("unknown config type")
+	}
+
 	err := v.Unmarshal(cfg)
 	if err != nil {
 		panic(err)
 	}
 
-	if cfg.Topology.Instances == nil {
-		panic("instances is nil")
-	}
+	resultMap := cfg.Convert()
 
-	if cfg.Topology.Clusters == nil {
-		panic("clusters is nil")
-	}
-
-	// готовим конфиг для vshard-router`а
-	vshardRouterTopology := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo)
-
-	for rsName, rs := range cfg.Topology.Clusters {
-		rsUUID, err := uuid.Parse(rs.ReplicasetUUID)
-		if err != nil {
-			log.Printf("Can't parse replicaset uuid: %s", err)
-
-			os.Exit(2)
-		}
-
-		rsInstances := make([]vshardrouter.InstanceInfo, 0)
-
-		for _, instInfo := range cfg.Topology.Instances {
-			if instInfo.Cluster != rsName {
-				continue
-			}
-
-			instUUID, err := uuid.Parse(instInfo.Box.InstanceUUID)
-			if err != nil {
-				log.Printf("Can't parse replicaset uuid: %s", err)
-
-				panic(err)
-			}
-
-			rsInstances = append(rsInstances, vshardrouter.InstanceInfo{
-				Addr: instInfo.Box.Listen,
-				UUID: instUUID,
-			})
-		}
-
-		vshardRouterTopology[vshardrouter.ReplicasetInfo{
-			Name: rsName,
-			UUID: rsUUID,
-		}] = rsInstances
-	}
-
-	return &Provider{v: v, rs: vshardRouterTopology}
+	return &Provider{ctx: ctx, v: v, rs: resultMap}
 }
 
 func (p *Provider) WatchChanges() *Provider {
 	// todo
 	return p
+}
+
+func (p *Provider) Topology() map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo {
+	return p.rs
 }
 
 func (p *Provider) Validate() error {
@@ -105,28 +88,7 @@ func (p *Provider) Validate() error {
 }
 
 func (p *Provider) Init(c vshardrouter.TopologyController) error {
-	return c.AddReplicasets(context.TODO(), p.rs)
+	return c.AddReplicasets(p.ctx, p.rs)
 }
 
 func (p *Provider) Close() {}
-
-type ClusterInfo struct {
-	ReplicasetUUID string `yaml:"replicaset_uuid" mapstructure:"replicaset_uuid"`
-}
-
-type InstanceInfo struct {
-	Cluster string
-	Box     struct {
-		Listen       string `json:"listen,omitempty" yaml:"listen" mapstructure:"listen"`
-		InstanceUUID string `yaml:"instance_uuid" mapstructure:"instance_uuid" json:"instanceUUID,omitempty"`
-	}
-}
-
-type TopologyConfig struct {
-	Topology SourceTopologyConfig `json:"topology"`
-}
-
-type SourceTopologyConfig struct {
-	Clusters  map[string]ClusterInfo  `json:"clusters,omitempty" yaml:"clusters" `
-	Instances map[string]InstanceInfo `json:"instances,omitempty" yaml:"instances"`
-}

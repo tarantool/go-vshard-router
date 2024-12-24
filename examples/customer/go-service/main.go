@@ -42,7 +42,7 @@ func main() {
 	cfg := readCfg(os.Args[1])
 
 	vshardRouter, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
-		Logger:           &vshardrouter.StdoutLogger{},
+		Loggerf:          &vshardrouter.StdoutLoggerf{},
 		DiscoveryTimeout: time.Minute,
 		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
 		TopologyProvider: static.NewProvider(cfg.Storage.Topology),
@@ -258,7 +258,7 @@ func readCfg(cfgPath string) Config {
 		os.Exit(2)
 	}
 
-	// готовим конфиг для vshard-router`а
+	// prepare vshard router config
 	vshardRouterTopology := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo)
 
 	for rsName, rs := range cfg.Storage.SourceTopology.Clusters {
