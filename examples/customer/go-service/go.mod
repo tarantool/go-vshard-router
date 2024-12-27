@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/spf13/viper v1.19.0
 	github.com/swaggo/swag v1.16.3
-	github.com/tarantool/go-tarantool/v2 v2.1.1-0.20240922082035-592db69eed86
+	github.com/tarantool/go-tarantool/v2 v2.2.1
 	github.com/tarantool/go-vshard-router v0.0.9
 )
 
@@ -33,7 +33,7 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tarantool/go-iproto v1.0.0 // indirect
+	github.com/tarantool/go-iproto v1.1.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect

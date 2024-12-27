@@ -8,8 +8,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/snksoft/crc v1.1.0
 	github.com/spf13/viper v1.19.0
-	github.com/stretchr/testify v1.9.0
-	github.com/tarantool/go-tarantool/v2 v2.1.1-0.20240922082035-592db69eed86
+	github.com/stretchr/testify v1.10.0
+	github.com/tarantool/go-tarantool/v2 v2.2.1
 	github.com/vmihailenco/msgpack/v5 v5.3.5
 	go.etcd.io/etcd/client/v2 v2.305.17
 	go.etcd.io/etcd/client/v3 v3.5.17
@@ -91,7 +91,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tarantool/go-iproto v1.0.0 // indirect
+	github.com/tarantool/go-iproto v1.1.0 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
