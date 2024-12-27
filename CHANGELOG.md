@@ -1,4 +1,4 @@
-## Unreleased
+## v1.3.2
 
 CHANGES:
 
