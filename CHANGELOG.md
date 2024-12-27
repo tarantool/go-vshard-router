@@ -3,6 +3,7 @@
 CHANGES:
 
 * Updated Go version from 1.20 to 1.22.
+* Update go-tarantool to 2.2.1 and testify to v1.10.0.
 
 TESTS:
 
