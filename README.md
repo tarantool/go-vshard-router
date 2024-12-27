@@ -182,6 +182,17 @@ func main() {
   fmt.Printf("get typed result: %v", info)
 }
 ```
+### Providers
+You can use topology (configuration) providers as the source of router configuration.  
+Currently, the following providers are supported:
+
+- **etcd** (for configurations similar to [moonlibs/config](https://github.com/moonlibs/config?tab=readme-ov-file#example-of-etcd-configuration-for-vshard-based-applications-etcdclustervshard) in etcd v2 for Tarantool versions below 3)
+- **static** (for specifying configuration directly in the code for ease of testing)
+- **[viper](providers/viper/README.md)**
+  - etcd v3
+  - consul
+  - files
+
 ### Learn more examples
 #### Quick Start
 Learn with th [Quick Start](docs/doc.md), which include  examples and theory.
