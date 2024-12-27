@@ -182,6 +182,17 @@ func main() {
 }
 
 ```
+
+### Провайдеры
+Как источник конфигурации вы можете использовать провайдеры топологии(конфигурации).
+На данный момент есть поддержка следующих провайдеров:
+- **etcd** (для конфигурации аналогичной [moonlibs/config](https://github.com/moonlibs/config?tab=readme-ov-file#example-of-etcd-configuration-for-vshard-based-applications-etcdclustervshard) в etcd v2 для tarantool версии ниже 3)
+- **static** (для указания конфигурации прямо из кода и простоты тестирования)
+- **[viper](providers/viper/README.md)**
+  - etcd v3
+  - consul
+  - files
+
 ### Ознакомьтесь с другими примерами
 #### Быстрое начало
 Познакомьтесь с  [Полной документацией](docs/doc_ru.md), которая включает в себя примеры и теорию.

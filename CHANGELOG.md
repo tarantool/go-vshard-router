@@ -1,3 +1,17 @@
+## Unreleased
+
+CHANGES:
+
+* Updated Go version from 1.20 to 1.22.
+
+TESTS:
+
+* Added a test for using etcd v3 with Viper.
+
+REFACTOR:
+
+* Added information about available providers to the README.
+
 ## v1.3.1
 
 REFACTOR:
@@ -16,15 +30,18 @@ EXAMPLES:
 ## v1.3.0
 
 BUG FIXES:
+
 * Fix decoding fields for StorageCallVShardError (MasterUUID, ReplicasetUUID).
 
 CHANGES:
+
 * Add comment why and how we handle "NON_MASTER" vshard error.
 * Don't support 'type Error struct' anymore.
 * Linter: don't capitalize error strings and capitalize log.
 * Fix misspellings.
 * Handle vshard error the same way as lua vshard router (resolve issue #77).
-* Decode 'vshard.storage.call' response manually into struct vshardStorageCallResponseProto using DecodeMsgpack interface to reduce allocations (partially #61, #100).
+* Decode 'vshard.storage.call' response manually into struct vshardStorageCallResponseProto using DecodeMsgpack
+  interface to reduce allocations (partially #61, #100).
 * Remove `mapstructure` tag from StorageCallVShardError.
 * Update benchmarks in README files.
 * Package `mapstructure` is completely removed from direct dependencies list.
@@ -48,15 +65,18 @@ REFACTOR:
 * New backward-compatible signature for StorageResultTypedFunc to fix interface for RouterCallImpl.
 
 TESTS:
+
 * Rename bootstrap_test.go -> tarantool_test.go and new test in this file.
 * Test for new 'RouterMapCallRW[T]'.
 
 ## v1.2.0
 
 CHANGES:
+
 * We don't support LogProvider interface anymore, only LogfProvider should be used.
 
 BUG FIXES:
+
 * RouterCallImpl: retry on BucketResolve error.
 * RouterCallImpl: do not retry on vshard error "TRANSFER_IS_IN_PROGRESS".
 * RouterCallImpl: remove misleading RetryOnCall.
@@ -77,17 +97,21 @@ REFACTOR:
 * Support bucketSearchBatched method for batched buckets discovery (resolve #71).
 
 TESTS:
+
 * Tests for BucketsSearchMode (tnt/discovery_test.go).
-* The tests have been rewritten in such a way that now you can configure the cluster to suit any needs, the configuration of the clusters may differ and the launch is controlled from go.
+* The tests have been rewritten in such a way that now you can configure the cluster to suit any needs, the
+  configuration of the clusters may differ and the launch is controlled from go.
 * Legacy integration tests removed (tests/integration).
 
 ## v1.1.0
 
 CHANGES:
+
 * now if there is no etcd connection - etcd provider returns you error instead panic.
 * etcd provider also accepts context as input for working with the logger.
 
 BUG FIXES:
+
 * fixed the problem of re-creating a new context when starting discovery, which led to a lack of discovery logging.
 
 TESTS:
@@ -96,6 +120,7 @@ TESTS:
 * Indent fix for test/tnt/storage.lua.
 
 FEATURES:
+
 * now we write topology changes to debug logs.
 * now we write info logs about new replicaset adding and nodes state.
 * added pull request template to repository.
@@ -103,6 +128,7 @@ FEATURES:
 ## v1.0.1
 
 BUG FIXES:
+
 * fix invalid go-tarantool backward compatibility: NewCallRequest not method of router.
 
 ## 1.0.0
@@ -123,7 +149,7 @@ FEATURES:
 * DiscoveryTimeout by default is 1 minute (zero DiscoveryTimeout is not allowed #60)
 * All discovering logs has new prefix [DISCOVERY]
 * Introduce Replicaset.CallAsync, it is usefull to send concurrent requests to replicasets;
-	additionally, CallAsync provides new interface to interact with replicaset without cons of interface of ReplicaCall
+  additionally, CallAsync provides new interface to interact with replicaset without cons of interface of ReplicaCall
 * Retry tarantool request only on some vshard errors (#66).
 * Added call interfaces backwards compatible with go-tarantool (#31).
 
@@ -146,15 +172,16 @@ TESTS:
 * New tnt tests for RouterMapCallRWImpl
 * New tnt tests for topology logic
 * Big CI update
-  * 2 sections for CI: static checks and tests
-  * integration tests run on ci with Tarantool cluster on vshard
-  * implemented luacheck for static checks
+    * 2 sections for CI: static checks and tests
+    * integration tests run on ci with Tarantool cluster on vshard
+    * implemented luacheck for static checks
 * New tnt tests for ReplicaCall
 * New tnt tests for CallAsync
 * Init Go benches for tests/tnt
 
 EXAMPLES:
-* customer go mod fixed 
+
+* customer go mod fixed
 * add customer example listen addr log
 
 ## 0.0.12
@@ -190,7 +217,6 @@ REFACTOR:
 * Router implements directly TopologyController, no proxy object is used now
 * Makefile refactored for racetests
 * Tests coverage up 22% -> 33%
-
 
 ## 0.0.11
 
