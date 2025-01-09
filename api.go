@@ -1,6 +1,7 @@
 package vshard_router //nolint:revive
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -226,6 +227,33 @@ func (r VshardRouterCallResp) GetTyped(result []interface{}) error {
 	}
 
 	return nil
+}
+
+// GetTransparent decodes a response from user defined function into result.
+// The response has the same format as a direct call (without vshard router) to this function.
+// If you have some custom decoder for some lua handler's response, you can reuse your decoder using this method.
+// P.S. the maximum length of the response array is cut to 3 elements due to lua vshard storage implementation
+// see https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/storage/init.lua#L3130.
+func (r VshardRouterCallResp) GetTransparent(result interface{}) error {
+	// Make a msgpack binary with desired array length.
+	enc := msgpack.GetEncoder()
+	defer msgpack.PutEncoder(enc)
+
+	var buf bytes.Buffer
+	enc.Reset(&buf)
+
+	err := enc.EncodeArrayLen(len(r.rawMessages))
+	if err != nil {
+		return err
+	}
+
+	data := buf.Bytes()
+	for _, rawMessage := range r.rawMessages {
+		data = append(data, rawMessage...)
+	}
+
+	// Call users' custom decoder (if any).
+	return msgpack.Unmarshal(data, result)
 }
 
 // RouterCallImpl Perform shard operation function will restart operation

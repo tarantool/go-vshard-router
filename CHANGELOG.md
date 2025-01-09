@@ -1,3 +1,15 @@
+## Unreleased
+
+CHANGES:
+* All PR, issue references in #XYZ format in commits older than 42f363775dfb9eaf7ec2a6ed7a999847752cec00 refer to https://github.com/KaymeKaydex/go-vshard-router.
+
+FEATURES:
+
+* Implement VshardRouterCallResp.GetTransparent method to reuse custom msgpack decoders of direct call (#22).
+
+TESTS:
+* Tests for VshardRouterCallResp.GetTransparent.
+
 ## v1.3.2
 
 CHANGES:

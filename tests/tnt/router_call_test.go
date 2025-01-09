@@ -11,7 +11,7 @@ import (
 	"github.com/tarantool/go-vshard-router/providers/static"
 )
 
-func TestRouterCallProto(t *testing.T) {
+func TestRouterCallImplProto(t *testing.T) {
 	skipOnInvalidRun(t)
 
 	t.Parallel()
@@ -110,4 +110,55 @@ func TestRouterCallProto(t *testing.T) {
 	// 2. Try to call something
 	_, _, err = router.RouterCallImpl(ctx, bucketID, callOpts, "echo", args)
 	require.Nil(t, err, "RouterCallImpl echo finished with no err even on dirty bucket map")
+}
+
+func TestRouterCallProto(t *testing.T) {
+	skipOnInvalidRun(t)
+
+	t.Parallel()
+
+	ctx := context.Background()
+
+	cfg := getCfg()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(cfg),
+		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+		TotalBucketCount: totalBucketCount,
+		User:             defaultTntUser,
+		Password:         defaultTntPassword,
+	})
+	require.NoError(t, err, "NewRouter finished successfully")
+
+	bucketID := randBucketID(totalBucketCount)
+
+	rs, err := router.BucketResolve(ctx, bucketID)
+	require.NoError(t, err, "BucketResolve with no err")
+
+	const maxRespLen = 3
+	for argLen := 0; argLen <= maxRespLen; argLen++ {
+		args := []interface{}{}
+
+		for i := 0; i < argLen; i++ {
+			args = append(args, "arg")
+		}
+
+		var routerOpts vshardrouter.VshardRouterCallOptions
+		resp, err := router.CallRW(ctx, bucketID, "echo", args, routerOpts)
+		require.NoError(t, err, "router.CallRW with no err")
+
+		var resViaVshard interface{}
+		var resDirect interface{}
+
+		err = resp.GetTransparent(&resViaVshard)
+		require.NoError(t, err, "GetTransparent with no err")
+
+		var rsOpts vshardrouter.ReplicasetCallOpts
+
+		err = rs.CallAsync(ctx, rsOpts, "echo", args).GetTyped(&resDirect)
+		require.NoError(t, err, "rs.CallAsync.GetTyped with no error")
+
+		require.Equalf(t, resDirect, resViaVshard, "resDirect != resViaVshard on argLen %d", argLen)
+	}
 }
