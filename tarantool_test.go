@@ -64,6 +64,35 @@ var topology = map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo{
 	},
 }
 
+var noUUIDTopology = map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo{
+	{
+		Name:   "storage_1",
+		Weight: 1,
+	}: {
+		{
+			Name: "storage_1_a",
+			Addr: "127.0.0.1:3301",
+		},
+		{
+			Name: "storage_1_b",
+			Addr: "127.0.0.1:3302",
+		},
+	},
+	{
+		Name:   "storage_2",
+		Weight: 1,
+	}: {
+		{
+			Name: "storage_2_a",
+			Addr: "127.0.0.1:3303",
+		},
+		{
+			Name: "storage_2_b",
+			Addr: "127.0.0.1:3304",
+		},
+	},
+}
+
 func runTestMain(m *testing.M) int {
 	dialers := make([]tarantool.NetDialer, instancesCount)
 	opts := make([]test_helpers.StartOpts, instancesCount)
@@ -154,6 +183,19 @@ func TestRouter_RouterCallImpl_Decoding(t *testing.T) {
 		vshardrouter.CallOpts{VshardMode: vshardrouter.WriteMode, PoolMode: pool.RW, Timeout: 10 * time.Second},
 		"echo",
 		[]interface{}{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}, "test"})
+
+	require.NoError(t, err)
+}
+
+// for tarantool 3.0 uuid is not required
+func TestNewRouter_IgnoreUUID(t *testing.T) {
+	ctx := context.Background()
+
+	_, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TotalBucketCount: 100,
+		TopologyProvider: static.NewProvider(noUUIDTopology),
+		User:             "guest",
+	})
 
 	require.NoError(t, err)
 }

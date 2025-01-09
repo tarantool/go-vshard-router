@@ -96,9 +96,9 @@ func TestInstanceInfo_Validate(t *testing.T) {
 			Valid: false,
 		},
 		{
-			Name:  "no uuid",
-			II:    vshardrouter.InstanceInfo{Addr: "first.internal:1212"},
-			Valid: false,
+			Name:  "no uuid - ok",
+			II:    vshardrouter.InstanceInfo{Addr: "first.internal:1212", Name: "instance_123"},
+			Valid: true,
 		},
 		{
 			Name:  "no addr",
@@ -106,9 +106,9 @@ func TestInstanceInfo_Validate(t *testing.T) {
 			Valid: false,
 		},
 		{
-			Name:  "ok",
+			Name:  "no instance name",
 			II:    vshardrouter.InstanceInfo{UUID: uuid.New(), Addr: "first.internal:1212"},
-			Valid: true,
+			Valid: false,
 		},
 	}
 

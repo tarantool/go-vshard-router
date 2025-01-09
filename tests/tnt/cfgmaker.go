@@ -61,9 +61,11 @@ func (c cfgmaker) clusterCfg() map[vshardrouter.ReplicasetInfo][]vshardrouter.In
 			Name: fmt.Sprintf("replicaset_%d", rsID),
 			UUID: c.replicasetUUID(rsID),
 		}] = []vshardrouter.InstanceInfo{{
+			Name: "inst_1",
 			Addr: c.masterAddr(rsID),
 			UUID: c.masterUUID(rsID),
 		}, {
+			Name: "inst_2",
 			Addr: c.followerAddr(rsID),
 			UUID: c.followerUUID(rsID),
 		}}

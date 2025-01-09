@@ -21,7 +21,7 @@ var (
 type TopologyController interface {
 	AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceInfo) error
 	RemoveReplicaset(ctx context.Context, rsID uuid.UUID) []error
-	RemoveInstance(ctx context.Context, rsID, instanceID uuid.UUID) error
+	RemoveInstance(ctx context.Context, rsID uuid.UUID, instanceName string) error
 	AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, instances []InstanceInfo) error
 	AddReplicasets(ctx context.Context, replicasets map[ReplicasetInfo][]InstanceInfo) error
 }
@@ -53,7 +53,7 @@ func (r *Router) AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceI
 	}
 
 	instance := pool.Instance{
-		Name: info.UUID.String(),
+		Name: info.Name,
 		Dialer: tarantool.NetDialer{
 			Address:  info.Addr,
 			User:     r.cfg.User,
@@ -72,8 +72,8 @@ func (r *Router) AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceI
 	return rs.conn.Add(ctx, instance)
 }
 
-func (r *Router) RemoveInstance(ctx context.Context, rsID, instanceID uuid.UUID) error {
-	r.log().Debugf(ctx, "Trying to remove instance %s from router topology in rs %s", instanceID, rsID)
+func (r *Router) RemoveInstance(ctx context.Context, rsID uuid.UUID, instanceName string) error {
+	r.log().Debugf(ctx, "Trying to remove instance %s from router topology in rs %s", instanceName, rsID)
 
 	idToReplicasetRef := r.getIDToReplicaset()
 
@@ -82,13 +82,28 @@ func (r *Router) RemoveInstance(ctx context.Context, rsID, instanceID uuid.UUID)
 		return ErrReplicasetNotExists
 	}
 
-	return rs.conn.Remove(instanceID.String())
+	return rs.conn.Remove(instanceName)
 }
 
 func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, instances []InstanceInfo) error {
 	r.log().Debugf(ctx, "Trying to add replicaset %s to router topology", rsInfo)
 
 	idToReplicasetOld := r.getIDToReplicaset()
+
+	// tarantool 3+ configuration does not require uuid
+	if rsInfo.UUID == uuid.Nil {
+		// check that such replicaset does not exist
+		for _, rs := range idToReplicasetOld {
+			if rs.info.Name == rsInfo.Name {
+				return ErrReplicasetExists
+			}
+		}
+
+		// we just mock this uuid value
+		rsInfo.UUID = uuid.New()
+
+		r.log().Warnf(ctx, "replicaset %s is assigned uuid %s; this is a temporary need to migrate from uuid to names", rsInfo.Name, rsInfo.UUID)
+	}
 
 	if _, ok := idToReplicasetOld[rsInfo.UUID]; ok {
 		return ErrReplicasetExists
@@ -101,7 +116,7 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 	rsInstances := make([]pool.Instance, 0, len(instances))
 	for _, instance := range instances {
 		rsInstances = append(rsInstances, pool.Instance{
-			Name: instance.UUID.String(),
+			Name: instance.Name,
 			Dialer: tarantool.NetDialer{
 				Address:  instance.Addr,
 				User:     r.cfg.User,

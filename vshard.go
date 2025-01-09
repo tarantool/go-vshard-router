@@ -167,22 +167,37 @@ func (bsi *BucketStatInfo) DecodeMsgpack(d *msgpack.Decoder) error {
 	return nil
 }
 
+// InstanceInfo represents the information about an instance.
+// This struct holds the necessary details such as the name, address, and UUID of the instance.
 type InstanceInfo struct {
-	// Name is human-readable id for instance
-	// Starting with tarantool 3.0, the definition is made into a human-readable name,
-	// so far it is not used directly inside the library
+	// Name is a required field for the instance.
+	// Starting with Tarantool 3.0, this definition is made into a human-readable name,
+	// and it is now mandatory for use in the library.
+	// The Name should be a unique identifier for the instance.
 	Name string
+
+	// Addr specifies the address of the instance.
+	// This can be an IP address or a domain name, depending on how the instance is accessed.
+	// It is necessary for connecting to the instance or identifying its location.
 	Addr string
+
+	// UUID is an optional field that provides a globally unique identifier (UUID) for the instance.
+	// While this information is not mandatory, it can be useful for internal management or tracking purposes.
+	// The UUID ensures that each instance can be identified uniquely, but it is not required for basic operations.
 	UUID uuid.UUID
 }
 
 func (ii InstanceInfo) String() string {
+	if ii.UUID == uuid.Nil {
+		return fmt.Sprintf("{name: %s, addr: %s}", ii.Name, ii.Addr)
+	}
+
 	return fmt.Sprintf("{name: %s, uuid: %s, addr: %s}", ii.Name, ii.UUID, ii.Addr)
 }
 
 func (ii InstanceInfo) Validate() error {
-	if ii.UUID == uuid.Nil {
-		return fmt.Errorf("%w: empty uuid", ErrInvalidInstanceInfo)
+	if ii.Name == "" {
+		return fmt.Errorf("%w: empty name", ErrInvalidInstanceInfo)
 	}
 
 	if ii.Addr == "" {
