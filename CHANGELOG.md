@@ -1,3 +1,9 @@
+## Unreleased
+
+CHANGES:
+* Instance UUID no more required, use instance name instead.
+* Removed toolchain go1.23.3.
+
 ## v1.3.2
 
 CHANGES:

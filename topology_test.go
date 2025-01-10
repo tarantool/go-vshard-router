@@ -29,7 +29,7 @@ func TestController_AddInstance(t *testing.T) {
 
 		err := router.Topology().AddInstance(ctx, uuid.New(), InstanceInfo{
 			Addr: "127.0.0.1:8060",
-			UUID: uuid.New(),
+			Name: "instance_001",
 		})
 		require.True(t, errors.Is(err, ErrReplicasetNotExists))
 	})
@@ -58,7 +58,7 @@ func TestController_RemoveInstance(t *testing.T) {
 			},
 		}
 
-		err := router.Topology().RemoveInstance(ctx, uuid.New(), uuid.New())
+		err := router.Topology().RemoveInstance(ctx, uuid.New(), "")
 		require.True(t, errors.Is(err, ErrReplicasetNotExists))
 	})
 }

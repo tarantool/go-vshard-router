@@ -49,7 +49,7 @@ func TestTopology(t *testing.T) {
 	require.Nil(t, err, "AddReplicasets finished successfully")
 
 	// remove some random instance
-	err = router.RemoveInstance(ctx, rsInfo.UUID, insInfo.UUID)
+	err = router.RemoveInstance(ctx, rsInfo.UUID, insInfo.Name)
 	require.Nil(t, err, "RemoveInstance finished successfully")
 
 	// add it again
