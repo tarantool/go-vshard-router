@@ -99,7 +99,6 @@ import (
 
   "github.com/google/uuid"
   "github.com/tarantool/go-tarantool/v2"
-  "github.com/tarantool/go-tarantool/v2/pool"
 )
 
 func main() {
@@ -115,11 +114,11 @@ func main() {
       }: {
         {
           Addr: "127.0.0.1:1001",
-          UUID: uuid.New(),
+          Name: "1_1",
         },
         {
           Addr: "127.0.0.1:1002",
-          UUID: uuid.New(),
+          Name: "1_2",
         },
       },
       vshardrouter.ReplicasetInfo{
@@ -128,11 +127,11 @@ func main() {
       }: {
         {
           Addr: "127.0.0.1:2001",
-          UUID: uuid.New(),
+          Name: "2_1",
         },
         {
           Addr: "127.0.0.1:2002",
-          UUID: uuid.New(),
+          Name: "2_2",
         },
       },
     }),
@@ -153,10 +152,10 @@ func main() {
 
   bucketID := vshardrouter.BucketIDStrCRC32(strconv.FormatUint(user.ID, 10), directRouter.RouterBucketCount())
 
-  interfaceResult, getTyped, err := directRouter.RouterCallImpl(
+  resp, err := directRouter.Call(
     ctx,
     bucketID,
-    vshardrouter.CallOpts{VshardMode: vshardrouter.ReadMode, PoolMode: pool.PreferRO, Timeout: time.Second * 2},
+    vshardrouter.CallModeBRO,
     "storage.api.get_user_info",
     []interface{}{&struct {
       BucketID uint64                 `msgpack:"bucket_id" json:"bucket_id,omitempty"`
@@ -166,14 +165,22 @@ func main() {
       Body: map[string]interface{}{
         "user_id": "123456",
       },
-    }},
+    }}, vshardrouter.CallOpts{Timeout: time.Second * 2},
   )
+  if err != nil {
+    panic(err)
+  }
 
   info := &struct {
     BirthDay int
   }{}
 
-  err = getTyped(&[]interface{}{info})
+  err = resp.GetTyped(&[]interface{}{info})
+  if err != nil {
+    panic(err)
+  }
+
+  interfaceResult, err := resp.Get()
   if err != nil {
     panic(err)
   }

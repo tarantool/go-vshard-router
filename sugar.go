@@ -18,9 +18,8 @@ type CallRequest struct {
 
 // CallResponse is a backwards-compatible structure with go-tarantool for easier replacement.
 type CallResponse struct {
-	rawResp     interface{}
-	getTypedFnc StorageResultTypedFunc
-	err         error
+	resp VshardRouterCallResp
+	err  error
 }
 
 // NewCallRequest returns a new empty CallRequest.
@@ -56,23 +55,17 @@ func (r *Router) Do(req *CallRequest, userMode pool.Mode) *CallResponse {
 		bucketID = r.cfg.BucketGetter(ctx)
 	}
 
-	vshardMode := ReadMode
+	vshardMode := CallModeBRO
 
 	// If the user says he prefers to do it on the master,
 	// then he agrees that it will go to the replica, which means he will not write.
 	if userMode == pool.RW {
-		vshardMode = WriteMode
+		vshardMode = CallModeRW
 	}
 
-	resp.rawResp, resp.getTypedFnc, resp.err = r.RouterCallImpl(ctx,
-		bucketID,
-		CallOpts{
-			Timeout:    r.cfg.RequestTimeout,
-			PoolMode:   userMode,
-			VshardMode: vshardMode,
-		},
-		req.fnc,
-		req.args)
+	resp.resp, resp.err = r.Call(ctx, bucketID, vshardMode, req.fnc, req.args, CallOpts{
+		Timeout: r.cfg.RequestTimeout,
+	})
 
 	return resp
 }
@@ -104,7 +97,7 @@ func (resp *CallResponse) GetTyped(result interface{}) error {
 		return resp.err
 	}
 
-	return resp.getTypedFnc(result)
+	return resp.resp.GetTyped(result)
 }
 
 // Get implementation now works synchronously for response.
@@ -114,5 +107,5 @@ func (resp *CallResponse) Get() ([]interface{}, error) {
 		return nil, resp.err
 	}
 
-	return []interface{}{resp.rawResp}, nil
+	return resp.resp.Get()
 }
