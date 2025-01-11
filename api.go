@@ -1,6 +1,7 @@
 package vshard_router //nolint:revive
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -118,14 +119,16 @@ func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error
 	}
 
 	// isVShardRespOk is true
-	r.CallResp.rawMessages = make([]msgpack.RawMessage, 0, respArrayLen-1)
-	for i := 1; i < respArrayLen; i++ {
-		elem, err := d.DecodeRaw()
-		if err != nil {
-			return fmt.Errorf("failed to decode into msgpack.RawMessage element #%d of response array", i-1)
-		}
-		r.CallResp.rawMessages = append(r.CallResp.rawMessages, elem)
+	buf := bytes.NewBuffer(nil)
+
+	buf.WriteByte(msgpcode.FixedArrayLow | byte(respArrayLen-1))
+
+	_, err = buf.ReadFrom(d.Buffered())
+	if err != nil {
+		return err
 	}
+
+	r.CallResp.buf = buf
 
 	return nil
 }
@@ -169,122 +172,50 @@ func (s StorageCallVShardError) Error() string {
 	return fmt.Sprintf("%+v", alias(s))
 }
 
-type StorageResultTypedFunc = func(result ...interface{}) error
-
 type CallOpts struct {
-	VshardMode VshardMode // vshard mode in call
-	PoolMode   pool.Mode
-	Timeout    time.Duration
-}
-
-// VshardRouterCallMode is a type to represent call mode for Router.Call method.
-type VshardRouterCallMode int
-
-const (
-	// VshardRouterCallModeRO sets a read-only mode for Router.Call.
-	VshardRouterCallModeRO VshardRouterCallMode = iota
-	// VshardRouterCallModeRW sets a read-write mode for Router.Call.
-	VshardRouterCallModeRW
-	// VshardRouterCallModeRE acts like VshardRouterCallModeRO
-	// with preference for a replica rather than a master.
-	// This mode is not supported yet.
-	VshardRouterCallModeRE
-	// VshardRouterCallModeBRO acts like VshardRouterCallModeRO with balancing.
-	VshardRouterCallModeBRO
-	// VshardRouterCallModeBRE acts like VshardRouterCallModeRO with balancing
-	// and preference for a replica rather than a master.
-	VshardRouterCallModeBRE
-)
-
-// VshardRouterCallOptions represents options to Router.Call[XXX] methods.
-type VshardRouterCallOptions struct {
 	Timeout time.Duration
 }
 
+// CallMode is a type to represent call mode for Router.Call method.
+type CallMode int
+
+const (
+	// CallModeRO sets a read-only mode for Router.Call.
+	CallModeRO CallMode = iota
+	// CallModeRW sets a read-write mode for Router.Call.
+	CallModeRW
+	// CallModeRE acts like CallModeRO
+	// with preference for a replica rather than a master.
+	// This mode is not supported yet.
+	CallModeRE
+	// CallModeBRO acts like CallModeRO with balancing.
+	CallModeBRO
+	// CallModeBRE acts like CallModeRO with balancing
+	// and preference for a replica rather than a master.
+	CallModeBRE
+)
+
 // VshardRouterCallResp represents a response from Router.Call[XXX] methods.
 type VshardRouterCallResp struct {
-	rawMessages []msgpack.RawMessage
+	buf *bytes.Buffer
 }
 
 // Get returns a response from user defined function as []interface{}.
 func (r VshardRouterCallResp) Get() ([]interface{}, error) {
-	resp := make([]interface{}, len(r.rawMessages))
-	return resp, r.GetTyped(resp)
+	var result []interface{}
+	err := r.GetTyped(&result)
+
+	return result, err
 }
 
 // GetTyped decodes a response from user defined function into custom values.
-func (r VshardRouterCallResp) GetTyped(result []interface{}) error {
-	minLen := len(result)
-	if dataLen := len(r.rawMessages); dataLen < minLen {
-		minLen = dataLen
-	}
-
-	for i := 0; i < minLen; i++ {
-		if err := msgpack.Unmarshal(r.rawMessages[i], &result[i]); err != nil {
-			return fmt.Errorf("failed to decode into result[%d] element #%d of response array: %w", i, i, err)
-		}
-	}
-
-	return nil
-}
-
-// RouterCallImpl Perform shard operation function will restart operation
-// after wrong bucket response until timeout is reached
-// Deprecated: RouterCallImpl is deprecated.
-// See https://github.com/tarantool/go-vshard-router/issues/110.
-// Use Call method with RO, RW, RE, BRO, BRE modes instead.
-func (r *Router) RouterCallImpl(ctx context.Context,
-	bucketID uint64,
-	opts CallOpts,
-	fnc string,
-	args interface{}) (interface{}, StorageResultTypedFunc, error) {
-
-	var vshardCallOpts = VshardRouterCallOptions{
-		Timeout: opts.Timeout,
-	}
-
-	var vshardCallMode VshardRouterCallMode
-
-	switch opts.VshardMode {
-	case WriteMode:
-		vshardCallMode = VshardRouterCallModeRW
-	case ReadMode:
-		switch opts.PoolMode {
-		case pool.ANY:
-			vshardCallMode = VshardRouterCallModeBRO
-		case pool.RO:
-			vshardCallMode = VshardRouterCallModeRO
-		case pool.RW:
-			return nil, nil, fmt.Errorf("unexpected opts %+v", opts)
-		case pool.PreferRO:
-			vshardCallMode = VshardRouterCallModeBRE
-		case pool.PreferRW:
-			return nil, nil, fmt.Errorf("unexpected opts %+v", opts)
-		default:
-			return nil, nil, fmt.Errorf("unexpected opts.PoolMode %v", opts.PoolMode)
-		}
-	default:
-		return nil, nil, fmt.Errorf("unexpected opts.VshardMode %v", opts.VshardMode)
-	}
-
-	vshardCallResp, err := r.Call(ctx, bucketID, vshardCallMode, fnc, args, vshardCallOpts)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	data, err := vshardCallResp.Get()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return data, func(result ...interface{}) error {
-		return vshardCallResp.GetTyped(result)
-	}, nil
+func (r VshardRouterCallResp) GetTyped(result interface{}) error {
+	return msgpack.Unmarshal(r.buf.Bytes(), result)
 }
 
 // Call calls the function identified by 'fnc' on the shard storing the bucket identified by 'bucket_id'.
-func (r *Router) Call(ctx context.Context, bucketID uint64, mode VshardRouterCallMode,
-	fnc string, args interface{}, opts VshardRouterCallOptions) (VshardRouterCallResp, error) {
+func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
+	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
 	const vshardStorageClientCall = "vshard.storage.call"
 
 	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
@@ -295,18 +226,18 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode VshardRouterCal
 	var vshardMode VshardMode
 
 	switch mode {
-	case VshardRouterCallModeRO:
+	case CallModeRO:
 		poolMode, vshardMode = pool.RO, ReadMode
-	case VshardRouterCallModeRW:
+	case CallModeRW:
 		poolMode, vshardMode = pool.RW, WriteMode
-	case VshardRouterCallModeRE:
+	case CallModeRE:
 		// poolMode, vshardMode = pool.PreferRO, ReadMode
 		// since go-tarantool always use balance=true politic,
 		// we can't support this case until: https://github.com/tarantool/go-tarantool/issues/400
 		return VshardRouterCallResp{}, fmt.Errorf("mode VshardCallModeRE is not supported yet")
-	case VshardRouterCallModeBRO:
+	case CallModeBRO:
 		poolMode, vshardMode = pool.ANY, ReadMode
-	case VshardRouterCallModeBRE:
+	case CallModeBRE:
 		poolMode, vshardMode = pool.PreferRO, ReadMode
 	default:
 		return VshardRouterCallResp{}, fmt.Errorf("unknown VshardCallMode(%d)", mode)
@@ -447,34 +378,34 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode VshardRouterCal
 	}
 }
 
-// CallRO is an alias for Call with VshardRouterCallModeRO.
+// CallRO is an alias for Call with CallModeRO.
 func (r *Router) CallRO(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts VshardRouterCallOptions) (VshardRouterCallResp, error) {
-	return r.Call(ctx, bucketID, VshardRouterCallModeRO, fnc, args, opts)
+	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	return r.Call(ctx, bucketID, CallModeRO, fnc, args, opts)
 }
 
-// CallRW is an alias for Call with VshardRouterCallModeRW.
+// CallRW is an alias for Call with CallModeRW.
 func (r *Router) CallRW(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts VshardRouterCallOptions) (VshardRouterCallResp, error) {
-	return r.Call(ctx, bucketID, VshardRouterCallModeRW, fnc, args, opts)
+	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	return r.Call(ctx, bucketID, CallModeRW, fnc, args, opts)
 }
 
-// CallRE is an alias for Call with VshardRouterCallModeRE.
+// CallRE is an alias for Call with CallModeRE.
 func (r *Router) CallRE(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts VshardRouterCallOptions) (VshardRouterCallResp, error) {
-	return r.Call(ctx, bucketID, VshardRouterCallModeRE, fnc, args, opts)
+	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	return r.Call(ctx, bucketID, CallModeRE, fnc, args, opts)
 }
 
-// CallBRO is an alias for Call with VshardRouterCallModeBRO.
+// CallBRO is an alias for Call with CallModeBRO.
 func (r *Router) CallBRO(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts VshardRouterCallOptions) (VshardRouterCallResp, error) {
-	return r.Call(ctx, bucketID, VshardRouterCallModeBRO, fnc, args, opts)
+	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	return r.Call(ctx, bucketID, CallModeBRO, fnc, args, opts)
 }
 
-// CallBRE is an alias for Call with VshardRouterCallModeBRE.
+// CallBRE is an alias for Call with CallModeBRE.
 func (r *Router) CallBRE(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts VshardRouterCallOptions) (VshardRouterCallResp, error) {
-	return r.Call(ctx, bucketID, VshardRouterCallModeBRE, fnc, args, opts)
+	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	return r.Call(ctx, bucketID, CallModeBRE, fnc, args, opts)
 }
 
 // RouterMapCallRWOptions sets options for RouterMapCallRW.
@@ -613,7 +544,13 @@ func (r *Router) RouterMapCallRWImpl(
 	args interface{},
 	opts CallOpts,
 ) (map[uuid.UUID]interface{}, error) {
+	// nolint:gosimple
 	return RouterMapCallRW[interface{}](r, ctx, fnc, args, RouterMapCallRWOptions{Timeout: opts.Timeout})
+}
+
+type replicasetFuture struct {
+	uuid   uuid.UUID
+	future *tarantool.Future
 }
 
 // RouterMapCallRW is a consistent Map-Reduce. The given function is called on all masters in the
@@ -656,11 +593,6 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	storageRefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
 		Context(ctx).
 		Args([]interface{}{"storage_ref", refID, timeout})
-
-	type replicasetFuture struct {
-		uuid   uuid.UUID
-		future *tarantool.Future
-	}
 
 	var rsFutures = make([]replicasetFuture, 0, len(idToReplicasetRef))
 

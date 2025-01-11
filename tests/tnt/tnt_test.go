@@ -65,18 +65,3 @@ func randBucketID(totalBucketCount uint64) uint64 {
 	//nolint:gosec
 	return (rand.Uint64() % totalBucketCount) + 1
 }
-
-func TestConcurrentRouterCall(t *testing.T) {
-	/* TODO
-	1) Invalidate some random bucket id
-	2) concurrent call of replicalcall
-	*/
-	_ = t
-}
-
-func TestRetValues(t *testing.T) {
-	/* TODO
-	1) Replicacall returns no value, 1 value, 2 values, 3 values, etc..., assert, lua error?
-	*/
-	_ = t
-}

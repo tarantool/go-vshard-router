@@ -13,8 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"github.com/tarantool/go-tarantool/v2"
-	"github.com/tarantool/go-tarantool/v2/pool"
-
 	vshardrouter "github.com/tarantool/go-vshard-router"
 	"github.com/tarantool/go-vshard-router/providers/static"
 )
@@ -121,17 +119,15 @@ func (c *controller) CustomerAddHandler(w http.ResponseWriter, r *http.Request) 
 
 	req.BucketId = bucketID
 
-	faces, _, err := c.router.RouterCallImpl(ctx, bucketID, vshardrouter.CallOpts{
-		VshardMode: vshardrouter.WriteMode,
-		PoolMode:   pool.RW,
-		Timeout:    time.Minute,
-	}, "customer_add", []interface{}{req})
+	resp, err := c.router.Call(ctx, bucketID, vshardrouter.CallModeRW, "customer_add", []interface{}{req}, vshardrouter.CallOpts{
+		Timeout: time.Minute,
+	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Println(faces)
+	fmt.Println(resp.Get())
 }
 
 // customer lookup
@@ -169,21 +165,19 @@ func (c *controller) CustomerLookupHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	bucketID := c.router.RouterBucketIDStrCRC32(customerID)
-	faces, typedFnc, err := c.router.RouterCallImpl(ctx, bucketID, vshardrouter.CallOpts{
-		VshardMode: vshardrouter.ReadMode,
-		PoolMode:   pool.PreferRO,
-		Timeout:    time.Minute,
-	}, "customer_lookup", []interface{}{csID})
+	resp, err := c.router.Call(ctx, bucketID, vshardrouter.CallModeBRO, "customer_lookup", []interface{}{csID}, vshardrouter.CallOpts{
+		Timeout: time.Minute,
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Println(faces)
+	log.Println(resp.Get())
 
-	resp := &CustomerLookupResponse{}
+	rsp := &CustomerLookupResponse{}
 
-	err = typedFnc(resp)
+	err = resp.GetTyped(rsp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
