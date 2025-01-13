@@ -151,7 +151,7 @@ func TestRouter_ClusterBootstrap(t *testing.T) {
 
 	err = router.ClusterBootstrap(ctx, false)
 	require.NoError(t, err)
-	for _, rs := range router.RouterRouteAll() {
+	for _, rs := range router.RouteAll() {
 		count, err := rs.BucketsCount(ctx)
 		require.NoError(t, err)
 		require.NotEqual(t, count, uint64(0))
@@ -262,8 +262,8 @@ func TestRouter_Call(t *testing.T) {
 
 	bucketID := randBucketID(totalBucketCount)
 
-	rs, err := router.BucketResolve(ctx, bucketID)
-	require.NoError(t, err, "BucketResolve with no err")
+	rs, err := router.Route(ctx, bucketID)
+	require.NoError(t, err, "router.Route with no err")
 
 	t.Run("proto test", func(t *testing.T) {
 		const maxRespLen = 3
@@ -334,7 +334,7 @@ func TestRouter_Call(t *testing.T) {
 	})
 
 	t.Run("router.Call simulate vshard error", func(t *testing.T) {
-		rsMap := router.RouterRouteAll()
+		rsMap := router.RouteAll()
 
 		// 1. Replace replicaset for bucketID
 		for k, v := range rsMap {
@@ -388,7 +388,7 @@ func BenchmarkCallSimpleInsert_GO_Call(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		id := uuid.New()
 
-		bucketID := router.RouterBucketIDStrCRC32(id.String())
+		bucketID := router.BucketIDStrCRC32(id.String())
 		_, err := router.Call(
 			ctx,
 			bucketID,
@@ -425,7 +425,7 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 		id := uuid.New()
 		ids[i] = id
 
-		bucketID := router.RouterBucketIDStrCRC32(id.String())
+		bucketID := router.BucketIDStrCRC32(id.String())
 		_, err := router.Call(
 			ctx,
 			bucketID,
@@ -445,7 +445,7 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		id := ids[i]
 
-		bucketID := router.RouterBucketIDStrCRC32(id.String())
+		bucketID := router.BucketIDStrCRC32(id.String())
 		resp, err1 := router.Call(
 			ctx,
 			bucketID,
@@ -551,4 +551,63 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 
 	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", echoArgs, callOpts)
 	require.NotNilf(t, err, "RouterMapCallRWImpl failed on not full cluster")
+}
+
+func TestRouterRoute(t *testing.T) {
+	t.Parallel()
+
+	var modes = []vshardrouter.BucketsSearchMode{
+		vshardrouter.BucketsSearchLegacy,
+		vshardrouter.BucketsSearchBatchedQuick,
+		vshardrouter.BucketsSearchBatchedFull,
+	}
+
+	for _, mode := range modes {
+		testRouterRouteWithMode(t, mode)
+	}
+}
+
+func testRouterRouteWithMode(t *testing.T, searchMode vshardrouter.BucketsSearchMode) {
+	ctx := context.Background()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider:  static.NewProvider(topology),
+		DiscoveryTimeout:  5 * time.Second,
+		DiscoveryMode:     vshardrouter.DiscoveryModeOn,
+		BucketsSearchMode: searchMode,
+		TotalBucketCount:  totalBucketCount,
+		User:              username,
+	})
+
+	require.Nilf(t, err, "NewRouter finished successfully, mode %v", searchMode)
+
+	_, err = router.Route(ctx, totalBucketCount+1)
+	require.Error(t, err, "invalid bucketID")
+
+	// pick some random bucket
+	bucketID := randBucketID(totalBucketCount)
+
+	// clean everything
+	router.RouteMapClean()
+
+	// resolve it
+	rs, err := router.Route(ctx, bucketID)
+	require.Nilf(t, err, "router.Route ok, mode %v", searchMode)
+
+	// reset it again
+	router.BucketReset(bucketID)
+
+	// call RouteAll, because:
+	// 1. increase coverage
+	// 2. we cannot get replicaset uuid by rs instance (lack of interface)
+	rsMap := router.RouteAll()
+	for k, v := range rsMap {
+		if v == rs {
+			// set it again
+			res, err := router.BucketSet(bucketID, k)
+			require.Nil(t, err, nil, "BucketSet ok")
+			require.Equal(t, res, rs, "BucketSet res ok")
+			break
+		}
+	}
 }

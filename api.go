@@ -276,7 +276,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 		var rs *Replicaset
 
-		rs, err = r.BucketResolve(ctx, bucketID)
+		rs, err = r.Route(ctx, bucketID)
 		if err != nil {
 			r.metrics().RetryOnCall("bucket_resolve_error")
 
@@ -657,14 +657,8 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	return nameToResult, nil
 }
 
-// RouterRoute get replicaset object by bucket identifier.
-// alias to BucketResolve
-func (r *Router) RouterRoute(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	return r.BucketResolve(ctx, bucketID)
-}
-
-// RouterRouteAll return map of all replicasets.
-func (r *Router) RouterRouteAll() map[string]*Replicaset {
+// RouteAll return map of all replicasets.
+func (r *Router) RouteAll() map[string]*Replicaset {
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	// Do not expose the original map to prevent unauthorized modification.

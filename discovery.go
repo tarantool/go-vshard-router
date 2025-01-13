@@ -24,7 +24,7 @@ const (
 	DiscoveryModeOnce
 )
 
-// BucketsSearchMode a type, that used to define policy for BucketDiscovery method.
+// BucketsSearchMode a type, that used to define policy for Router.Route method.
 // See type Config for further details.
 type BucketsSearchMode int
 
@@ -45,8 +45,8 @@ const (
 	BucketsSearchBatchedFull
 )
 
-// BucketDiscovery search bucket in whole cluster
-func (r *Router) BucketDiscovery(ctx context.Context, bucketID uint64) (*Replicaset, error) {
+// Route get replicaset object by bucket identifier.
+func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
 	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
 		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
 	}
@@ -180,11 +180,6 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 	}
 
 	return rs, nil
-}
-
-// BucketResolve resolve bucket id to replicaset
-func (r *Router) BucketResolve(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	return r.BucketDiscovery(ctx, bucketID)
 }
 
 // DiscoveryHandleBuckets arrange downloaded buckets to the route map so as they reference a given replicaset.

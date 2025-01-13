@@ -12,11 +12,8 @@ func TestRouter_RouterBucketIDStrCRC32(t *testing.T) {
 		cfg: Config{TotalBucketCount: uint64(256000)},
 	}
 
-	t.Run("deprecated old logic", func(t *testing.T) {
-		require.Equal(t, uint64(103202), r.RouterBucketID("2707623829"))
-	})
 	t.Run("new logic with current hash sum", func(t *testing.T) {
-		require.Equal(t, uint64(103202), r.RouterBucketIDStrCRC32("2707623829"))
+		require.Equal(t, uint64(103202), r.BucketIDStrCRC32("2707623829"))
 	})
 }
 
@@ -27,7 +24,7 @@ func TestRouter_RouterBucketCount(t *testing.T) {
 		cfg: Config{TotalBucketCount: bucketCount},
 	}
 
-	require.Equal(t, bucketCount, r.RouterBucketCount())
+	require.Equal(t, bucketCount, r.BucketCount())
 }
 
 func TestRouter_RouteMapClean(t *testing.T) {

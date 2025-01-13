@@ -1,17 +1,25 @@
 ## Unreleased
 
+BUG FIXES:
+
+* ClusterBootstrap: eliminate direct access to r.idToReplicaset.
+
 CHANGES:
 
 * Instance UUID no more required, use instance name instead.
 * Removed toolchain go1.23.3.
 * Refactored GetTyped interface and logic. Now we use raw msg buffer instead raw messages. Interface works and looks
   like go-tarantool response.
-* ReplicaCall, RouterCallImpl, RouterMapCallRWImpl methods was removed cause it works invalid and looks useless.
+* ReplicaCall, RouterCallImpl, RouterMapCallRWImpl, BucketResolve, BucketDiscovery, RouterBucketID, RouterBucketIDMPCRC32 methods were removed cause they work invalid, look useless or redundant.
 * All PR, issue references in #XYZ format in commits older than 42f363775dfb9eaf7ec2a6ed7a999847752cec00 refer to https://github.com/KaymeKaydex/go-vshard-router.
 * VshardRouterCallMode type renamed to CallMode for simplicity.
 * StorageResultTypedFunc type removed as useless type.
 * Updated msgpack version from v5.3.5 to v5.4.1.
 * Replicaset identifier now is replicaset name instead uuid.
+* Remove unused Makefile target.
+* Update README.md, README_ru.md.
+* Rename RouterRouteAll -> RouteAll, RouterRoute -> Route, RouterBucketIDStrCRC32 -> BucketIDStrCRC32.
+* Replace github links to master branch with permalinks.
 
 TESTS:
 
@@ -21,6 +29,7 @@ TESTS:
 * TestRouterCallProto rewrote.
 * Start using constants in tarantool_test.go instead duplicate variables.
 * TestRouterMapCall moved to tarantool_test.go and renamed to TestRouter_RouterMapCallRWImpl.
+* Remove discovery_test.go, move tests/tnt/discovery_test.go -> tarantool_test.go
 
 ## v1.3.2
 
