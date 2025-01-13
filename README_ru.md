@@ -209,12 +209,12 @@ func main() {
 ### Go Bench
 
 | Бенчмарк                         | Число запусков | Время (ns/op) | Память (B/op) | Аллокации (allocs/op) |
-|----------------------------------|----------------|---------------|---------------|-----------------------|
+|---------------------------------------|--------|---------------|----------------|-------------------------|
 | BenchmarkCallSimpleInsert_GO-12       | 14216  | 81118         | 1419           | 29                      |
 | BenchmarkCallSimpleInsert_Lua-12      | 9580   | 123307        | 1131           | 19                      |
 | BenchmarkCallSimpleSelect_GO-12       | 18832  | 65190         | 1879           | 38                      |
 | BenchmarkCallSimpleSelect_Lua-12      | 9963   | 104781        | 1617           | 28                      |
-
+| BenchmarkRouter_Call_Select_SyncPool-12 | 19956  | 60924         | 1848           | 36                      |
 
 ### [K6](https://github.com/grafana/k6)
 

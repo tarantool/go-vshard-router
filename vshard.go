@@ -120,6 +120,15 @@ type Config struct {
 	// that is, our retry timeout if the buckets, for example, move.
 	// Currently, it only works for sugar implementations .
 	RequestTimeout time.Duration
+
+	// EnableResponseSyncPool determines whether the sync pool for responses should be enabled.
+	// When enabled, a pool will be used to reuse response objects, improving memory management and performance.
+	// If this option is enabled, you must call the Close method on the Response object when done using it,
+	// otherwise, memory leaks may occur due to unreleased resources.
+	EnableResponseSyncPool bool
+	// EnableDecodersSyncPool determines whether the sync pool for decoders should be enabled.
+	// When enabled, a pool will be used to reuse decoder objects, reducing the overhead of creating new decoders.
+	EnableDecodersSyncPool bool
 }
 
 type BucketStatInfo struct {

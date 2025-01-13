@@ -209,13 +209,15 @@ Service with go-vshard-router on top of the tarantool example from the original 
 ## Benchmarks
 ### Go Bench
 
+Вот обновленная таблица с добавленным benchmark:
+
 | Benchmark                             | Runs   | Time (ns/op) | Memory (B/op) | Allocations (allocs/op) |
 |---------------------------------------|--------|---------------|----------------|-------------------------|
 | BenchmarkCallSimpleInsert_GO-12       | 14216  | 81118         | 1419           | 29                      |
 | BenchmarkCallSimpleInsert_Lua-12      | 9580   | 123307        | 1131           | 19                      |
 | BenchmarkCallSimpleSelect_GO-12       | 18832  | 65190         | 1879           | 38                      |
 | BenchmarkCallSimpleSelect_Lua-12      | 9963   | 104781        | 1617           | 28                      |
-
+| BenchmarkRouter_Call_Select_SyncPool-12 | 19956  | 60924         | 1848           | 36                      |
 
 ### [K6](https://github.com/grafana/k6)
 Topology:
