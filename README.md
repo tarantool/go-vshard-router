@@ -108,31 +108,13 @@ func main() {
     DiscoveryTimeout: time.Minute,
     DiscoveryMode:    vshardrouter.DiscoveryModeOn,
     TopologyProvider: static.NewProvider(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo{
-      vshardrouter.ReplicasetInfo{
-        Name: "replcaset_1",
-        UUID: uuid.New(),
-      }: {
-        {
-          Addr: "127.0.0.1:1001",
-          Name: "1_1",
-        },
-        {
-          Addr: "127.0.0.1:1002",
-          Name: "1_2",
-        },
+      {Name: "replcaset_1", UUID: uuid.New()}: {
+        {Addr: "127.0.0.1:1001", Name: "1_1"},
+        {Addr: "127.0.0.1:1002", Name: "1_2"},
       },
-      vshardrouter.ReplicasetInfo{
-        Name: "replcaset_2",
-        UUID: uuid.New(),
-      }: {
-        {
-          Addr: "127.0.0.1:2001",
-          Name: "2_1",
-        },
-        {
-          Addr: "127.0.0.1:2002",
-          Name: "2_2",
-        },
+      {Name: "replcaset_2", UUID: uuid.New()}: {
+        {Addr: "127.0.0.1:2001", Name: "2_1"},
+        {Addr: "127.0.0.1:2002", Name: "2_2"},
       },
     }),
     TotalBucketCount: 128000,
