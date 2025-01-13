@@ -85,9 +85,12 @@ jobs:
           export NREPLICASETS=5
           make test
 
-      - name: Upload coverage reports to Codecov
+      - name: Install goveralls
         if: ${{ matrix.coverage }}
-        uses: codecov/codecov-action@v4.0.1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: KaymeKaydex/go-vshard-router
+        run: go install github.com/mattn/goveralls@latest
+
+      - name: Send coverage
+        if: ${{ matrix.coverage }}
+        env:
+          COVERALLS_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: goveralls -coverprofile=coverage.out -service=github

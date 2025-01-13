@@ -5,13 +5,14 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/tarantool/go-vshard-router.svg)](https://pkg.go.dev/github.com/tarantool/go-vshard-router)
 [![Actions Status][actions-badge]][actions-url]
 [![Go Report Card](https://goreportcard.com/badge/github.com/tarantool/go-vshard-router)](https://goreportcard.com/report/github.com/tarantool/go-vshard-router)
-[![codecov](https://codecov.io/gh/KaymeKaydex/go-vshard-router/graph/badge.svg?token=WLRWE97IT1)](https://codecov.io/gh/KaymeKaydex/go-vshard-router)
+[![Code Coverage][coverage-badge]][coverage-url]
+[![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/KaymeKaydex/go-vshard-router/master/LICENSE)
 
 Translations:
 - [English](https://github.com/tarantool/go-vshard-router/blob/main/README.md)
 
 go-vshard-router — библиотека для отправки запросов напрямую в стораджа в шардированный кластер tarantool,
-без использования tarantool-router.  Эта библиотека написана на основе [модуля библиотеки tarantool vhsard router](https://github.com/tarantool/vshard/blob/master/vshard/router/init.lua). go-vshard-router применяет новый подход к созданию кластера
+без использования tarantool-router.  Эта библиотека написана на основе [модуля библиотеки tarantool vhsard router](https://github.com/tarantool/vshard/blob/master/vshard/router/init.lua) и [коннектора go-tarantool](https://github.com/tarantool/go-tarantool). go-vshard-router применяет новый подход к созданию кластера
 
 Схема кластера с tarantool-proxy
 ```mermaid
@@ -235,3 +236,5 @@ func main() {
 
 [actions-badge]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml
+[coverage-badge]: https://coveralls.io/repos/github/tarantool/go-vshard-router/badge.svg?branch=master
+[coverage-url]: https://coveralls.io/github/tarantool/go-vshard-router?branch=master
