@@ -467,3 +467,72 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 
 	b.ReportAllocs()
 }
+
+func BenchmarkRouter_Call_Select_SyncPool(b *testing.B) {
+	b.StopTimer()
+
+	ctx := context.Background()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider:       static.NewProvider(topology),
+		DiscoveryTimeout:       5 * time.Second,
+		DiscoveryMode:          vshardrouter.DiscoveryModeOn,
+		TotalBucketCount:       totalBucketCount,
+		User:                   username,
+		EnableResponseSyncPool: true,
+		EnableDecodersSyncPool: true,
+	})
+	require.NoError(b, err)
+
+	err = router.ClusterBootstrap(ctx, true)
+	require.NoError(b, err)
+
+	ids := make([]uuid.UUID, b.N)
+
+	for i := 0; i < b.N; i++ {
+		id := uuid.New()
+		ids[i] = id
+
+		bucketID := router.RouterBucketIDStrCRC32(id.String())
+		resp, err := router.Call(
+			ctx,
+			bucketID,
+			vshardrouter.CallModeRW,
+			"product_add",
+			[]interface{}{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
+			vshardrouter.CallOpts{},
+		)
+		require.NoError(b, err)
+		resp.Close()
+	}
+
+	type Request struct {
+		ID string `msgpack:"id"`
+	}
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		id := ids[i]
+
+		bucketID := router.RouterBucketIDStrCRC32(id.String())
+		resp, err1 := router.Call(
+			ctx,
+			bucketID,
+			vshardrouter.CallModeBRO,
+			"product_get",
+			[]interface{}{&Request{ID: id.String()}},
+			vshardrouter.CallOpts{Timeout: time.Second},
+		)
+
+		var product Product
+
+		err2 := resp.GetTyped(&[]interface{}{&product})
+		resp.Close()
+		b.StopTimer()
+		require.NoError(b, err1)
+		require.NoError(b, err2)
+		b.StartTimer()
+	}
+
+	b.ReportAllocs()
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,14 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
+
+// Create a global pool for bytes.Buffer
+var responseBufferPool = sync.Pool{
+	New: func() interface{} {
+		// The New function creates a new bytes.Buffer instance if the pool is empty
+		return &bytes.Buffer{}
+	},
+}
 
 // --------------------------------------------------------------------------------
 // -- API
@@ -36,6 +45,9 @@ type vshardStorageCallResponseProto struct {
 	AssertError *assertError            // not nil if there is assert error
 	VshardError *StorageCallVShardError // not nil if there is vshard response
 	CallResp    VshardRouterCallResp
+
+	EnableResponseSyncPool bool
+	EnableDecodersSyncPool bool
 }
 
 func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error {
@@ -119,7 +131,13 @@ func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error
 	}
 
 	// isVShardRespOk is true
-	buf := bytes.NewBuffer(nil)
+	var buf *bytes.Buffer
+
+	if r.EnableResponseSyncPool {
+		buf = responseBufferPool.Get().(*bytes.Buffer)
+	} else {
+		buf = bytes.NewBuffer(nil)
+	}
 
 	buf.WriteByte(msgpcode.FixedArrayLow | byte(respArrayLen-1))
 
@@ -129,6 +147,9 @@ func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error
 	}
 
 	r.CallResp.buf = buf
+
+	r.CallResp.enableDecodersSyncPool = r.EnableDecodersSyncPool
+	r.CallResp.enableResponseSyncPool = r.EnableResponseSyncPool
 
 	return nil
 }
@@ -197,7 +218,16 @@ const (
 
 // VshardRouterCallResp represents a response from Router.Call[XXX] methods.
 type VshardRouterCallResp struct {
-	buf *bytes.Buffer
+	buf                    *bytes.Buffer
+	enableDecodersSyncPool bool
+	enableResponseSyncPool bool
+}
+
+func (r VshardRouterCallResp) Close() {
+	if r.enableResponseSyncPool {
+		r.buf.Reset()
+		responseBufferPool.Put(r.buf)
+	}
 }
 
 // Get returns a response from user defined function as []interface{}.
@@ -210,7 +240,15 @@ func (r VshardRouterCallResp) Get() ([]interface{}, error) {
 
 // GetTyped decodes a response from user defined function into custom values.
 func (r VshardRouterCallResp) GetTyped(result interface{}) error {
-	return msgpack.Unmarshal(r.buf.Bytes(), result)
+	if !r.enableDecodersSyncPool {
+		return msgpack.Unmarshal(r.buf.Bytes(), result)
+	}
+
+	decoder := msgpack.GetDecoder()
+	decoder.Reset(r.buf)
+	defer msgpack.PutDecoder(decoder)
+
+	return decoder.Decode(result)
 }
 
 // Call calls the function identified by 'fnc' on the shard storing the bucket identified by 'bucket_id'.
@@ -294,6 +332,10 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 		r.log().Infof(ctx, "Try call %s on replicaset %s for bucket %d", fnc, rs.info.Name, bucketID)
 
 		var storageCallResponse vshardStorageCallResponseProto
+
+		storageCallResponse.EnableResponseSyncPool = r.cfg.EnableResponseSyncPool
+		storageCallResponse.EnableDecodersSyncPool = r.cfg.EnableDecodersSyncPool
+
 		err = rs.conn.Do(tntReq, poolMode).GetTyped(&storageCallResponse)
 		if err != nil {
 			return VshardRouterCallResp{}, fmt.Errorf("got error on future.GetTyped(): %w", err)
