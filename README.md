@@ -9,7 +9,7 @@
 [![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/KaymeKaydex/go-vshard-router/master/LICENSE)
 
 Translations:
-- [Русский](https://github.com/tarantool/go-vshard-router/blob/main/README_ru.md)
+- [Русский](https://github.com/tarantool/go-vshard-router/blob/master/README_ru.md)
 
 
 go-vshard-router is a library for sending requests to a sharded tarantool cluster directly,
