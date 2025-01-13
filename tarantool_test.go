@@ -468,7 +468,7 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 	b.ReportAllocs()
 }
 
-func TestRouter_RouterMapCallRWImpl(t *testing.T) {
+func TestRouter_RouterMapCallRW(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -482,19 +482,16 @@ func TestRouter_RouterMapCallRWImpl(t *testing.T) {
 	})
 	require.Nil(t, err, "NewRouter created successfully")
 
-	err = router.ClusterBootstrap(ctx, false)
-	require.NoError(t, err)
-
-	callOpts := vshardrouter.CallOpts{}
+	callOpts := vshardrouter.RouterMapCallRWOptions{}
 
 	const arg = "arg1"
 
 	// Enusre that RouterMapCallRWImpl works at all
 	echoArgs := []interface{}{arg}
-	resp, err := router.RouterMapCallRWImpl(ctx, "echo", echoArgs, callOpts)
+	respStr, err := vshardrouter.RouterMapCallRW[string](router, ctx, "echo", echoArgs, callOpts)
 	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
 
-	for k, v := range resp {
+	for k, v := range respStr {
 		require.Equalf(t, arg, v, "RouterMapCallRWImpl value ok for %v", k)
 	}
 
@@ -507,16 +504,16 @@ func TestRouter_RouterMapCallRWImpl(t *testing.T) {
 
 	// RouterMapCallRWImpl returns only one value
 	echoArgs = []interface{}{arg, "arg2"}
-	resp, err = router.RouterMapCallRWImpl(ctx, "echo", echoArgs, callOpts)
+	respStr, err = vshardrouter.RouterMapCallRW[string](router, ctx, "echo", echoArgs, callOpts)
 	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
 
-	for k, v := range resp {
+	for k, v := range respStr {
 		require.Equalf(t, arg, v, "RouterMapCallRWImpl value ok for %v", k)
 	}
 
 	// RouterMapCallRWImpl returns nil when no return value
 	noArgs := []interface{}{}
-	resp, err = router.RouterMapCallRWImpl(ctx, "echo", noArgs, callOpts)
+	resp, err := vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", noArgs, callOpts)
 	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
 
 	for k, v := range resp {
@@ -528,7 +525,7 @@ func TestRouter_RouterMapCallRWImpl(t *testing.T) {
 	sleepArgs := []interface{}{sleepToSec}
 
 	start := time.Now()
-	_, err = router.RouterMapCallRWImpl(ctx, "sleep", sleepArgs, vshardrouter.CallOpts{
+	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "sleep", sleepArgs, vshardrouter.RouterMapCallRWOptions{
 		Timeout: 2 * time.Second, // because default timeout is 0.5 sec
 	})
 	duration := time.Since(start)
@@ -538,21 +535,20 @@ func TestRouter_RouterMapCallRWImpl(t *testing.T) {
 	require.Less(t, duration, 1200*time.Millisecond, "Requests were send concurrently")
 
 	// RouterMapCallRWImpl returns err on raise_luajit_error
-	_, err = router.RouterMapCallRWImpl(ctx, "raise_luajit_error", noArgs, callOpts)
+	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "raise_luajit_error", noArgs, callOpts)
 	require.NotNil(t, err, "RouterMapCallRWImpl raise_luajit_error finished with error")
 
 	// RouterMapCallRWImpl invalid usage
-	_, err = router.RouterMapCallRWImpl(ctx, "echo", nil, callOpts)
+	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", nil, callOpts)
 	require.NotNil(t, err, "RouterMapCallRWImpl with nil args finished with error")
 
 	// Ensure that RouterMapCallRWImpl doesn't work when it mean't to
 	for rsInfo := range topology {
 		errs := router.RemoveReplicaset(ctx, rsInfo.Name)
 		require.Emptyf(t, errs, "%s successfully removed from router", rsInfo.Name)
-
 		break
 	}
 
-	_, err = router.RouterMapCallRWImpl(ctx, "echo", echoArgs, callOpts)
+	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", echoArgs, callOpts)
 	require.NotNilf(t, err, "RouterMapCallRWImpl failed on not full cluster")
 }
