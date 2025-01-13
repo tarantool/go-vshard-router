@@ -55,6 +55,10 @@ type Replicaset struct {
 	EtalonBucketCount uint64
 }
 
+func (rs *Replicaset) Pooler() pool.Pooler {
+	return rs.conn
+}
+
 func (rs *Replicaset) String() string {
 	return rs.info.String()
 }
