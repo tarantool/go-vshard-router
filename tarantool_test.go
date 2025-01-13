@@ -200,17 +200,17 @@ func TestRouter_Topology(t *testing.T) {
 	tCtrl := router.Topology()
 
 	// remove some random replicaset
-	_ = tCtrl.RemoveReplicaset(ctx, rsInfo.UUID)
+	_ = tCtrl.RemoveReplicaset(ctx, rsInfo.Name)
 	// add it again
 	err = tCtrl.AddReplicasets(ctx, map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo{rsInfo: topology[rsInfo]})
 	require.Nil(t, err, "AddReplicasets finished successfully")
 
 	// remove some random instance
-	err = tCtrl.RemoveInstance(ctx, rsInfo.UUID, insInfo.Name)
+	err = tCtrl.RemoveInstance(ctx, rsInfo.Name, insInfo.Name)
 	require.Nil(t, err, "RemoveInstance finished successfully")
 
 	// add it again
-	err = tCtrl.AddInstance(ctx, rsInfo.UUID, insInfo)
+	err = tCtrl.AddInstance(ctx, rsInfo.Name, insInfo)
 	require.Nil(t, err, "AddInstance finished successfully")
 }
 
@@ -466,4 +466,93 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 	}
 
 	b.ReportAllocs()
+}
+
+func TestRouter_RouterMapCallRWImpl(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topology),
+		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+		TotalBucketCount: totalBucketCount,
+		User:             username,
+	})
+	require.Nil(t, err, "NewRouter created successfully")
+
+	err = router.ClusterBootstrap(ctx, false)
+	require.NoError(t, err)
+
+	callOpts := vshardrouter.CallOpts{}
+
+	const arg = "arg1"
+
+	// Enusre that RouterMapCallRWImpl works at all
+	echoArgs := []interface{}{arg}
+	resp, err := router.RouterMapCallRWImpl(ctx, "echo", echoArgs, callOpts)
+	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
+
+	for k, v := range resp {
+		require.Equalf(t, arg, v, "RouterMapCallRWImpl value ok for %v", k)
+	}
+
+	echoArgs = []interface{}{1}
+	respInt, err := vshardrouter.RouterMapCallRW[int](router, ctx, "echo", echoArgs, vshardrouter.RouterMapCallRWOptions{})
+	require.NoError(t, err, "RouterMapCallRW[int] echo finished with no err")
+	for k, v := range respInt {
+		require.Equalf(t, 1, v, "RouterMapCallRW[int] value ok for %v", k)
+	}
+
+	// RouterMapCallRWImpl returns only one value
+	echoArgs = []interface{}{arg, "arg2"}
+	resp, err = router.RouterMapCallRWImpl(ctx, "echo", echoArgs, callOpts)
+	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
+
+	for k, v := range resp {
+		require.Equalf(t, arg, v, "RouterMapCallRWImpl value ok for %v", k)
+	}
+
+	// RouterMapCallRWImpl returns nil when no return value
+	noArgs := []interface{}{}
+	resp, err = router.RouterMapCallRWImpl(ctx, "echo", noArgs, callOpts)
+	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
+
+	for k, v := range resp {
+		require.Equalf(t, nil, v, "RouterMapCallRWImpl value ok for %v", k)
+	}
+
+	// Ensure that RouterMapCallRWImpl sends requests concurrently
+	const sleepToSec int = 1
+	sleepArgs := []interface{}{sleepToSec}
+
+	start := time.Now()
+	_, err = router.RouterMapCallRWImpl(ctx, "sleep", sleepArgs, vshardrouter.CallOpts{
+		Timeout: 2 * time.Second, // because default timeout is 0.5 sec
+	})
+	duration := time.Since(start)
+
+	require.NoError(t, err, "RouterMapCallRWImpl sleep finished with no err")
+	require.Greater(t, len(topology), 1, "There are more than one replicasets")
+	require.Less(t, duration, 1200*time.Millisecond, "Requests were send concurrently")
+
+	// RouterMapCallRWImpl returns err on raise_luajit_error
+	_, err = router.RouterMapCallRWImpl(ctx, "raise_luajit_error", noArgs, callOpts)
+	require.NotNil(t, err, "RouterMapCallRWImpl raise_luajit_error finished with error")
+
+	// RouterMapCallRWImpl invalid usage
+	_, err = router.RouterMapCallRWImpl(ctx, "echo", nil, callOpts)
+	require.NotNil(t, err, "RouterMapCallRWImpl with nil args finished with error")
+
+	// Ensure that RouterMapCallRWImpl doesn't work when it mean't to
+	for rsInfo := range topology {
+		errs := router.RemoveReplicaset(ctx, rsInfo.Name)
+		require.Emptyf(t, errs, "%s successfully removed from router", rsInfo.Name)
+
+		break
+	}
+
+	_, err = router.RouterMapCallRWImpl(ctx, "echo", echoArgs, callOpts)
+	require.NotNilf(t, err, "RouterMapCallRWImpl failed on not full cluster")
 }

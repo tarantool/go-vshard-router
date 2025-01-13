@@ -15,9 +15,14 @@ import (
 )
 
 var (
-	ErrInvalidConfig       = fmt.Errorf("config invalid")
+	// ErrInvalidConfig is returned when the configuration is invalid.
+	ErrInvalidConfig = fmt.Errorf("config invalid")
+	// ErrInvalidInstanceInfo is returned when the instance information is invalid.
 	ErrInvalidInstanceInfo = fmt.Errorf("invalid instance info")
-	ErrTopologyProvider    = fmt.Errorf("got error from topology provider")
+	// ErrInvalidReplicasetInfo is returned when the replicaset information is invalid.
+	ErrInvalidReplicasetInfo = fmt.Errorf("invalid replicaset info")
+	// ErrTopologyProvider is returned when there is an error from the topology provider.
+	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
 // This data struct is instroduced by https://github.com/tarantool/go-vshard-router/issues/39.
@@ -42,15 +47,15 @@ type consistentView struct {
 type Router struct {
 	cfg Config
 
-	// idToReplicasetMutex guards not the map itself, but the variable idToReplicaset.
-	// idToReplicaset is an immutable object by our convention.
+	// nameToReplicasetMutex guards not the map itself, but the variable idToReplicaset.
+	// nameToReplicaset is an immutable object by our convention.
 	// Whenever we add or remove a replicaset, we create a new map object.
-	// idToReplicaset can be modified only by TopologyController methods.
+	// nameToReplicaset can be modified only by TopologyController methods.
 	// Assuming that we rarely add or remove some replicaset,
 	// it should be the simplest and most efficient way of handling concurrent access.
 	// Additionally, we can safely iterate over a map because it never changes.
-	idToReplicasetMutex sync.RWMutex
-	idToReplicaset      map[uuid.UUID]*Replicaset
+	nameToReplicasetMutex sync.RWMutex
+	nameToReplicaset      map[string]*Replicaset
 
 	viewMutex sync.RWMutex
 	view      *consistentView
@@ -220,8 +225,8 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	}
 
 	router := &Router{
-		cfg:            cfg,
-		idToReplicaset: make(map[uuid.UUID]*Replicaset),
+		cfg:              cfg,
+		nameToReplicaset: make(map[string]*Replicaset),
 		view: &consistentView{
 			routeMap: make([]atomic.Pointer[Replicaset], cfg.TotalBucketCount+1),
 		},
@@ -254,10 +259,10 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 }
 
 // BucketSet Set a bucket to a replicaset.
-func (r *Router) BucketSet(bucketID uint64, rsID uuid.UUID) (*Replicaset, error) {
-	idToReplicasetRef := r.getIDToReplicaset()
+func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
+	nameToReplicasetRef := r.getNameToReplicaset()
 
-	rs := idToReplicasetRef[rsID]
+	rs := nameToReplicasetRef[rsName]
 	if rs == nil {
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
@@ -399,10 +404,10 @@ func (r *Router) RouterBucketCount() uint64 {
 // error will result in an immediate return, ensuring that the operation either
 // succeeds fully or fails fast.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
-	rssToBootstrap := make([]Replicaset, 0, len(r.idToReplicaset))
+	rssToBootstrap := make([]Replicaset, 0, len(r.nameToReplicaset))
 	var lastErr error
 
-	for _, rs := range r.idToReplicaset {
+	for _, rs := range r.nameToReplicaset {
 		rssToBootstrap = append(rssToBootstrap, *rs)
 	}
 

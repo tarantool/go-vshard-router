@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
 )
@@ -19,33 +18,33 @@ var (
 // This decision is made intentionally because there is no point in providing concurrence safety for this case.
 // In any case, a caller can use his own external synchronization primitive to handle concurrent access.
 type TopologyController interface {
-	AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceInfo) error
-	RemoveReplicaset(ctx context.Context, rsID uuid.UUID) []error
-	RemoveInstance(ctx context.Context, rsID uuid.UUID, instanceName string) error
+	AddInstance(ctx context.Context, rsName string, info InstanceInfo) error
+	RemoveReplicaset(ctx context.Context, rsName string) []error
+	RemoveInstance(ctx context.Context, rsName, instanceName string) error
 	AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, instances []InstanceInfo) error
 	AddReplicasets(ctx context.Context, replicasets map[ReplicasetInfo][]InstanceInfo) error
 }
 
-func (r *Router) getIDToReplicaset() map[uuid.UUID]*Replicaset {
-	r.idToReplicasetMutex.RLock()
-	idToReplicasetRef := r.idToReplicaset
-	r.idToReplicasetMutex.RUnlock()
+func (r *Router) getNameToReplicaset() map[string]*Replicaset {
+	r.nameToReplicasetMutex.RLock()
+	nameToReplicasetRef := r.nameToReplicaset
+	r.nameToReplicasetMutex.RUnlock()
 
-	return idToReplicasetRef
+	return nameToReplicasetRef
 }
 
-func (r *Router) setIDToReplicaset(idToReplicasetNew map[uuid.UUID]*Replicaset) {
-	r.idToReplicasetMutex.Lock()
-	r.idToReplicaset = idToReplicasetNew
-	r.idToReplicasetMutex.Unlock()
+func (r *Router) setNameToReplicaset(nameToReplicasetNew map[string]*Replicaset) {
+	r.nameToReplicasetMutex.Lock()
+	r.nameToReplicaset = nameToReplicasetNew
+	r.nameToReplicasetMutex.Unlock()
 }
 
 func (r *Router) Topology() TopologyController {
 	return r
 }
 
-func (r *Router) AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceInfo) error {
-	r.log().Debugf(ctx, "Trying to add instance %s to router topology in rs %s", info, rsID)
+func (r *Router) AddInstance(ctx context.Context, rsName string, info InstanceInfo) error {
+	r.log().Debugf(ctx, "Trying to add instance %s to router topology in rs %s", info, rsName)
 
 	err := info.Validate()
 	if err != nil {
@@ -62,9 +61,9 @@ func (r *Router) AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceI
 		Opts: r.cfg.PoolOpts,
 	}
 
-	idToReplicasetRef := r.getIDToReplicaset()
+	nameToReplicasetRef := r.getNameToReplicaset()
 
-	rs := idToReplicasetRef[rsID]
+	rs := nameToReplicasetRef[rsName]
 	if rs == nil {
 		return ErrReplicasetNotExists
 	}
@@ -72,12 +71,12 @@ func (r *Router) AddInstance(ctx context.Context, rsID uuid.UUID, info InstanceI
 	return rs.conn.Add(ctx, instance)
 }
 
-func (r *Router) RemoveInstance(ctx context.Context, rsID uuid.UUID, instanceName string) error {
-	r.log().Debugf(ctx, "Trying to remove instance %s from router topology in rs %s", instanceName, rsID)
+func (r *Router) RemoveInstance(ctx context.Context, rsName, instanceName string) error {
+	r.log().Debugf(ctx, "Trying to remove instance %s from router topology in rs %s", instanceName, rsName)
 
-	idToReplicasetRef := r.getIDToReplicaset()
+	nameToReplicasetRef := r.getNameToReplicaset()
 
-	rs := idToReplicasetRef[rsID]
+	rs := nameToReplicasetRef[rsName]
 	if rs == nil {
 		return ErrReplicasetNotExists
 	}
@@ -88,24 +87,14 @@ func (r *Router) RemoveInstance(ctx context.Context, rsID uuid.UUID, instanceNam
 func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, instances []InstanceInfo) error {
 	r.log().Debugf(ctx, "Trying to add replicaset %s to router topology", rsInfo)
 
-	idToReplicasetOld := r.getIDToReplicaset()
-
-	// tarantool 3+ configuration does not require uuid
-	if rsInfo.UUID == uuid.Nil {
-		// check that such replicaset does not exist
-		for _, rs := range idToReplicasetOld {
-			if rs.info.Name == rsInfo.Name {
-				return ErrReplicasetExists
-			}
-		}
-
-		// we just mock this uuid value
-		rsInfo.UUID = uuid.New()
-
-		r.log().Warnf(ctx, "replicaset %s is assigned uuid %s; this is a temporary need to migrate from uuid to names", rsInfo.Name, rsInfo.UUID)
+	err := rsInfo.Validate()
+	if err != nil {
+		return err
 	}
 
-	if _, ok := idToReplicasetOld[rsInfo.UUID]; ok {
+	nameToReplicasetOld := r.getNameToReplicaset()
+
+	if _, ok := nameToReplicasetOld[rsInfo.Name]; ok {
 		return ErrReplicasetExists
 	}
 
@@ -153,17 +142,17 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 	replicaset.conn = conn
 
 	// Create an entirely new map object
-	idToReplicasetNew := make(map[uuid.UUID]*Replicaset)
-	for k, v := range idToReplicasetOld {
-		idToReplicasetNew[k] = v
+	nameToReplicasetNew := make(map[string]*Replicaset)
+	for k, v := range nameToReplicasetOld {
+		nameToReplicasetNew[k] = v
 	}
-	idToReplicasetNew[rsInfo.UUID] = replicaset // add when conn is ready
+	nameToReplicasetNew[rsInfo.Name] = replicaset // add when conn is ready
 
 	// We could detect concurrent access to the TopologyController interface
 	// by comparing references to r.idToReplicaset and idToReplicasetOld.
 	// But it requires reflection which I prefer to avoid.
 	// See: https://stackoverflow.com/questions/58636694/how-to-know-if-2-go-maps-reference-the-same-data.
-	r.setIDToReplicaset(idToReplicasetNew)
+	r.setNameToReplicaset(nameToReplicasetNew)
 
 	return nil
 }
@@ -183,24 +172,24 @@ func (r *Router) AddReplicasets(ctx context.Context, replicasets map[ReplicasetI
 	return nil
 }
 
-func (r *Router) RemoveReplicaset(ctx context.Context, rsID uuid.UUID) []error {
-	r.log().Debugf(ctx, "Trying to remove replicaset %s from router topology", rsID)
+func (r *Router) RemoveReplicaset(ctx context.Context, rsName string) []error {
+	r.log().Debugf(ctx, "Trying to remove replicaset %s from router topology", rsName)
 
-	idToReplicasetOld := r.getIDToReplicaset()
+	nameToReplicasetOld := r.getNameToReplicaset()
 
-	rs := idToReplicasetOld[rsID]
+	rs := nameToReplicasetOld[rsName]
 	if rs == nil {
 		return []error{ErrReplicasetNotExists}
 	}
 
 	// Create an entirely new map object
-	idToReplicasetNew := make(map[uuid.UUID]*Replicaset)
-	for k, v := range idToReplicasetOld {
-		idToReplicasetNew[k] = v
+	nameToReplicasetNew := make(map[string]*Replicaset)
+	for k, v := range nameToReplicasetOld {
+		nameToReplicasetNew[k] = v
 	}
-	delete(idToReplicasetNew, rsID)
+	delete(nameToReplicasetNew, rsName)
 
-	r.setIDToReplicaset(idToReplicasetNew)
+	r.setNameToReplicaset(nameToReplicasetNew)
 
 	return rs.conn.CloseGraceful()
 }

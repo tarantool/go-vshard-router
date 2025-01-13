@@ -9,7 +9,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/google/uuid"
 	"github.com/tarantool/go-tarantool/v2"
 )
 
@@ -70,18 +69,18 @@ func (r *Router) BucketDiscovery(ctx context.Context, bucketID uint64) (*Replica
 }
 
 func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	idToReplicasetRef := r.getIDToReplicaset()
+	nameToReplicasetRef := r.getNameToReplicaset()
 
 	type rsFuture struct {
-		rsID   uuid.UUID
+		rsName string
 		future *tarantool.Future
 	}
 
-	var rsFutures = make([]rsFuture, 0, len(idToReplicasetRef))
+	var rsFutures = make([]rsFuture, 0, len(nameToReplicasetRef))
 	// Send a bunch of parallel requests
-	for rsID, rs := range idToReplicasetRef {
+	for rsName, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, rsFuture{
-			rsID:   rsID,
+			rsName: rsName,
 			future: rs.bucketStatAsync(ctx, bucketID),
 		})
 	}
@@ -90,16 +89,16 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 		if _, err := bucketStatWait(rsFuture.future); err != nil {
 			var vshardError StorageCallVShardError
 			if !errors.As(err, &vshardError) {
-				r.log().Errorf(ctx, "bucketSearchLegacy: bucketStatWait call error for %v: %v", rsFuture.rsID, err)
+				r.log().Errorf(ctx, "bucketSearchLegacy: bucketStatWait call error for %v: %v", rsFuture.rsName, err)
 			}
 			// just skip, bucket may not belong to this replicaset
 			continue
 		}
 
 		// It's ok if several replicasets return ok to bucket_stat command for the same bucketID, just pick any of them.
-		rs, err := r.BucketSet(bucketID, rsFuture.rsID)
+		rs, err := r.BucketSet(bucketID, rsFuture.rsName)
 		if err != nil {
-			r.log().Errorf(ctx, "bucketSearchLegacy: can't set rsID %v for bucketID %d: %v", rsFuture.rsID, bucketID, err)
+			r.log().Errorf(ctx, "bucketSearchLegacy: can't set rsID %v for bucketID %d: %v", rsFuture.rsName, bucketID, err)
 			return nil, newVShardErrorNoRouteToBucket(bucketID)
 		}
 
@@ -127,21 +126,21 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/storage/init.lua#L1700
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/consts.lua#L37
 func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
-	idToReplicasetRef := r.getIDToReplicaset()
+	nameToReplicasetRef := r.getNameToReplicaset()
 	view := r.getConsistentView()
 
 	type rsFuture struct {
 		rs     *Replicaset
-		rsID   uuid.UUID
+		rsName string
 		future *tarantool.Future
 	}
 
-	var rsFutures = make([]rsFuture, 0, len(idToReplicasetRef))
+	var rsFutures = make([]rsFuture, 0, len(nameToReplicasetRef))
 	// Send a bunch of parallel requests
-	for rsID, rs := range idToReplicasetRef {
+	for rsName, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, rsFuture{
 			rs:     rs,
-			rsID:   rsID,
+			rsName: rsName,
 			future: rs.bucketsDiscoveryAsync(ctx, bucketIDToFind),
 		})
 	}
@@ -151,7 +150,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 	for _, rsFuture := range rsFutures {
 		resp, err := bucketsDiscoveryWait(rsFuture.future)
 		if err != nil {
-			r.log().Errorf(ctx, "bucketSearchBatched: bucketsDiscoveryWait error for %v: %v", rsFuture.rsID, err)
+			r.log().Errorf(ctx, "bucketSearchBatched: bucketsDiscoveryWait error for %v: %v", rsFuture.rsName, err)
 			// just skip, we still may find our bucket in another replicaset
 			continue
 		}
@@ -231,9 +230,9 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 	errGr, ctx := errgroup.WithContext(ctx)
 
 	view := r.getConsistentView()
-	idToReplicasetRef := r.getIDToReplicaset()
+	nameToReplicasetRef := r.getNameToReplicaset()
 
-	for _, rs := range idToReplicasetRef {
+	for _, rs := range nameToReplicasetRef {
 		rs := rs
 
 		errGr.Go(func() error {

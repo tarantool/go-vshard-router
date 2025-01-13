@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
 	"github.com/vmihailenco/msgpack/v5"
@@ -313,27 +311,35 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L663
 				r.BucketReset(bucketID)
 
-				if vshardError.Destination != "" {
-					destinationUUID, err := uuid.Parse(vshardError.Destination)
-					if err != nil {
-						return VshardRouterCallResp{}, fmt.Errorf("protocol violation %s: malformed destination %w: %w",
-							vshardStorageClientCall, vshardError, err)
-					}
-
+				if destination := vshardError.Destination; destination != "" {
 					var loggedOnce bool
 					for {
-						idToReplicasetRef := r.getIDToReplicaset()
-						if _, ok := idToReplicasetRef[destinationUUID]; ok {
-							_, err := r.BucketSet(bucketID, destinationUUID)
+						nameToReplicasetRef := r.getNameToReplicaset()
+
+						_, destinationExists := nameToReplicasetRef[destination]
+
+						if !destinationExists {
+							// for older logic with uuid we must support backward compatibility
+							// if destination is uuid and not name, lets find it too
+							for _, rsRef := range nameToReplicasetRef {
+								if rsRef.info.UUID.String() == destination {
+									destinationExists = true
+									break
+								}
+							}
+						}
+
+						if destinationExists {
+							_, err := r.BucketSet(bucketID, destination)
 							if err == nil {
 								break // breaks loop
 							}
-							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destinationUUID, err)
+							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destination, err)
 						}
 
 						if !loggedOnce {
 							r.log().Warnf(ctx, "Replicaset '%v' was not found, but received from storage as destination - please "+
-								"update configuration", destinationUUID)
+								"update configuration", destination)
 							loggedOnce = true
 						}
 
@@ -543,13 +549,14 @@ func (r *Router) RouterMapCallRWImpl(
 	fnc string,
 	args interface{},
 	opts CallOpts,
-) (map[uuid.UUID]interface{}, error) {
+) (map[string]interface{}, error) {
 	// nolint:gosimple
 	return RouterMapCallRW[interface{}](r, ctx, fnc, args, RouterMapCallRWOptions{Timeout: opts.Timeout})
 }
 
 type replicasetFuture struct {
-	uuid   uuid.UUID
+	// replicaset name
+	name   string
 	future *tarantool.Future
 }
 
@@ -561,7 +568,7 @@ type replicasetFuture struct {
 // see: https://github.com/golang/go/issues/49085.
 func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	fnc string, args interface{}, opts RouterMapCallRWOptions,
-) (map[uuid.UUID]T, error) {
+) (map[string]T, error) {
 	const vshardStorageServiceCall = "vshard.storage._call"
 
 	timeout := callTimeoutDefault
@@ -572,14 +579,14 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	timeStart := time.Now()
 	refID := r.refID.Add(1)
 
-	idToReplicasetRef := r.getIDToReplicaset()
+	nameToReplicasetRef := r.getNameToReplicaset()
 
 	defer func() {
 		// call function "storage_unref" if map_callrw is failed or successed
 		storageUnrefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
 			Args([]interface{}{"storage_unref", refID})
 
-		for _, rs := range idToReplicasetRef {
+		for _, rs := range nameToReplicasetRef {
 			future := rs.conn.Do(storageUnrefReq, pool.RW)
 			future.SetError(nil) // TODO: does it cancel the request above or not?
 		}
@@ -594,12 +601,12 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		Context(ctx).
 		Args([]interface{}{"storage_ref", refID, timeout})
 
-	var rsFutures = make([]replicasetFuture, 0, len(idToReplicasetRef))
+	var rsFutures = make([]replicasetFuture, 0, len(nameToReplicasetRef))
 
 	// ref stage: send concurrent ref requests
-	for uuid, rs := range idToReplicasetRef {
+	for name, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, replicasetFuture{
-			uuid:   uuid,
+			name:   name,
 			future: rs.conn.Do(storageRefReq, pool.RW),
 		})
 	}
@@ -612,11 +619,11 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		var storageRefResponse storageRefResponseProto
 
 		if err := rsFuture.future.GetTyped(&storageRefResponse); err != nil {
-			return nil, fmt.Errorf("rs {%s} storage_ref err: %v", rsFuture.uuid, err)
+			return nil, fmt.Errorf("rs {%s} storage_ref err: %v", rsFuture.name, err)
 		}
 
 		if storageRefResponse.err != nil {
-			return nil, fmt.Errorf("storage_ref failed on %v: %v", rsFuture.uuid, storageRefResponse.err)
+			return nil, fmt.Errorf("storage_ref failed on %v: %v", rsFuture.name, storageRefResponse.err)
 		}
 
 		totalBucketCount += storageRefResponse.bucketCount
@@ -636,33 +643,33 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	rsFutures = rsFutures[0:0]
 
 	// map stage: send concurrent map requests
-	for uuid, rs := range idToReplicasetRef {
+	for name, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, replicasetFuture{
-			uuid:   uuid,
+			name:   name,
 			future: rs.conn.Do(storageMapReq, pool.RW),
 		})
 	}
 
 	// map stage: get their responses
-	idToResult := make(map[uuid.UUID]T)
+	nameToResult := make(map[string]T)
 	for _, rsFuture := range rsFutures {
 		var storageMapResponse storageMapResponseProto[T]
 
 		err := rsFuture.future.GetTyped(&storageMapResponse)
 		if err != nil {
-			return nil, fmt.Errorf("rs {%s} storage_map err: %v", rsFuture.uuid, err)
+			return nil, fmt.Errorf("rs {%s} storage_map err: %v", rsFuture.name, err)
 		}
 
 		if !storageMapResponse.ok {
-			return nil, fmt.Errorf("storage_map failed on %v: %+v", rsFuture.uuid, storageMapResponse.err)
+			return nil, fmt.Errorf("storage_map failed on %v: %+v", rsFuture.name, storageMapResponse.err)
 		}
 
-		idToResult[rsFuture.uuid] = storageMapResponse.value
+		nameToResult[rsFuture.name] = storageMapResponse.value
 	}
 
 	r.metrics().RequestDuration(time.Since(timeStart), true, true)
 
-	return idToResult, nil
+	return nameToResult, nil
 }
 
 // RouterRoute get replicaset object by bucket identifier.
@@ -672,15 +679,15 @@ func (r *Router) RouterRoute(ctx context.Context, bucketID uint64) (*Replicaset,
 }
 
 // RouterRouteAll return map of all replicasets.
-func (r *Router) RouterRouteAll() map[uuid.UUID]*Replicaset {
-	idToReplicasetRef := r.getIDToReplicaset()
+func (r *Router) RouterRouteAll() map[string]*Replicaset {
+	nameToReplicasetRef := r.getNameToReplicaset()
 
 	// Do not expose the original map to prevent unauthorized modification.
-	idToReplicasetCopy := make(map[uuid.UUID]*Replicaset)
+	nameToReplicasetCopy := make(map[string]*Replicaset)
 
-	for k, v := range idToReplicasetRef {
-		idToReplicasetCopy[k] = v
+	for k, v := range nameToReplicasetRef {
+		nameToReplicasetCopy[k] = v
 	}
 
-	return idToReplicasetCopy
+	return nameToReplicasetCopy
 }
