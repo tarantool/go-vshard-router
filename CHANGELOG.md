@@ -11,6 +11,7 @@ CHANGES:
 * VshardRouterCallMode type renamed to CallMode for simplicity.
 * StorageResultTypedFunc type removed as useless type.
 * Updated msgpack version from v5.3.5 to v5.4.1.
+* Replicaset identifier now is replicaset name instead uuid.
 
 TESTS:
 
@@ -19,6 +20,7 @@ TESTS:
 * Moved TestReplicasetReplicaCall and Go benches  from tests/tnt to tarantool_test.go .
 * TestRouterCallProto rewrote.
 * Start using constants in tarantool_test.go instead duplicate variables.
+* TestRouterMapCall moved to tarantool_test.go and renamed to TestRouter_RouterMapCallRWImpl.
 
 ## v1.3.2
 

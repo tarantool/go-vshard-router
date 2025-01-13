@@ -13,16 +13,35 @@ import (
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
 
+// ReplicasetInfo represents information about a replicaset, including its name, unique identifier, weight, and state.
 type ReplicasetInfo struct {
-	Name             string
-	UUID             uuid.UUID
-	Weight           float64
-	PinnedCount      uint64
+	// Name — the name of the replicaset.
+	// This string is required and is used to identify the replicaset.
+	Name string
+	// UUID — the unique identifier of the replica.
+	// This is an optional value that can be used to uniquely distinguish each replicaset.
+	UUID uuid.UUID
+	// Weight — the weight of the replicaset.
+	// This floating-point number may be used to determine the importance or priority of the replicaset.
+	Weight float64
+	// PinnedCount — the number of pinned items.
+	// This value indicates how many items or tasks are associated with the replicaset.
+	PinnedCount uint64
+	// IgnoreDisbalance — a flag indicating whether to ignore load imbalance when distributing tasks.
+	// If true, the replicaset will be excluded from imbalance checks.
 	IgnoreDisbalance bool
 }
 
-func (rsi ReplicasetInfo) String() string {
-	return fmt.Sprintf("{name: %s, uuid: %s}", rsi.Name, rsi.UUID)
+func (ri ReplicasetInfo) Validate() error {
+	if ri.Name == "" {
+		return fmt.Errorf("%w: rsInfo.Name is empty", ErrInvalidReplicasetInfo)
+	}
+
+	return nil
+}
+
+func (ri ReplicasetInfo) String() string {
+	return fmt.Sprintf("{name: %s, uuid: %s}", ri.Name, ri.UUID)
 }
 
 type ReplicasetCallOpts struct {

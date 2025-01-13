@@ -92,7 +92,7 @@ func (c *concurrentTopologyProvider) Init(tc vshardrouter.TopologyController) er
 				removed[key] = added[key]
 				delete(added, key)
 
-				_ = tc.RemoveReplicaset(ctx, key.UUID)
+				_ = tc.RemoveReplicaset(ctx, key.UUID.String())
 			default:
 				panic("unreachable case")
 			}
