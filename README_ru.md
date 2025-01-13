@@ -149,7 +149,7 @@ func main() {
     ID: 123,
   }
 
-  bucketID := vshardrouter.BucketIDStrCRC32(strconv.FormatUint(user.ID, 10), directRouter.RouterBucketCount())
+  bucketID := directRouter.BucketIDStrCRC32(strconv.FormatUint(user.ID, 10))
 
   resp, err := directRouter.Call(
     ctx,

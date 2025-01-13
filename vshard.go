@@ -105,7 +105,7 @@ type Config struct {
 	// in buckets discovering logic. Default is 10ms.
 	DiscoveryWorkStep time.Duration
 
-	// BucketsSearchMode defines policy for BucketDiscovery method.
+	// BucketsSearchMode defines policy for Router.Route method.
 	// Default value is BucketsSearchLegacy.
 	// See BucketsSearchMode constants for more detail.
 	BucketsSearchMode BucketsSearchMode
@@ -346,12 +346,6 @@ func validateCfg(cfg Config) error {
 // -- Other
 // --------------------------------------------------------------------------------
 
-// RouterBucketID  return the bucket identifier from the parameter used for sharding
-// Deprecated: RouterBucketID() is deprecated, use RouterBucketIDStrCRC32() RouterBucketIDMPCRC32() instead
-func (r *Router) RouterBucketID(shardKey string) uint64 {
-	return BucketIDStrCRC32(shardKey, r.cfg.TotalBucketCount)
-}
-
 func BucketIDStrCRC32(shardKey string, totalBucketCount uint64) uint64 {
 	return crc.CalculateCRC(&crc.Parameters{
 		Width:      32,
@@ -363,32 +357,15 @@ func BucketIDStrCRC32(shardKey string, totalBucketCount uint64) uint64 {
 	}, []byte(shardKey))%totalBucketCount + 1
 }
 
-func (r *Router) RouterBucketIDStrCRC32(shardKey string) uint64 {
+// BucketIDStrCRC32 return the bucket identifier from the parameter used for sharding.
+func (r *Router) BucketIDStrCRC32(shardKey string) uint64 {
 	return BucketIDStrCRC32(shardKey, r.cfg.TotalBucketCount)
 }
 
-// RouterBucketIDMPCRC32 is not implemented yet
-func RouterBucketIDMPCRC32(total uint64, keys ...string) {
-	// todo: implement
-	_, _ = total, keys
-	panic("RouterBucketIDMPCRC32 is not implemented yet")
-}
-
-func (r *Router) RouterBucketCount() uint64 {
+// BucketCount returns the total number of buckets specified in cfg.
+func (r *Router) BucketCount() uint64 {
 	return r.cfg.TotalBucketCount
 }
-
-// todo: router_sync
-
-// --------------------------------------------------------------------------------
-// -- Public API protection
-// --------------------------------------------------------------------------------
-
-// todo: router_api_call_safe
-// todo: router_api_call_unsafe
-// todo: router_make_api
-// todo: router_enable
-// todo: router_disable
 
 // -------------------------------------------------------------------------------_
 // -- Bootstrap
@@ -404,10 +381,12 @@ func (r *Router) RouterBucketCount() uint64 {
 // error will result in an immediate return, ensuring that the operation either
 // succeeds fully or fails fast.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
-	rssToBootstrap := make([]Replicaset, 0, len(r.nameToReplicaset))
+	nameToReplicasetRef := r.getNameToReplicaset()
+
+	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
 	var lastErr error
 
-	for _, rs := range r.nameToReplicaset {
+	for _, rs := range nameToReplicasetRef {
 		rssToBootstrap = append(rssToBootstrap, *rs)
 	}
 

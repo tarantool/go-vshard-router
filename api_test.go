@@ -22,6 +22,6 @@ func TestVshardMode_String_NotEmpty(t *testing.T) {
 
 func TestRouter_RouterRouteAll(t *testing.T) {
 	t.Parallel()
-	m := emptyRouter.RouterRouteAll()
+	m := emptyRouter.RouteAll()
 	require.Empty(t, m)
 }

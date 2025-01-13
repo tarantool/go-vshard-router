@@ -80,7 +80,7 @@ func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
 		id := uuid.New()
 		ids[i] = id
 
-		bucketID := router.RouterBucketIDStrCRC32(id.String())
+		bucketID := router.BucketIDStrCRC32(id.String())
 		_, err := router.Call(
 			ctx,
 			bucketID,
