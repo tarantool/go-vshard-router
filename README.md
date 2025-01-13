@@ -5,7 +5,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/tarantool/go-vshard-router.svg)](https://pkg.go.dev/github.com/tarantool/go-vshard-router)
 [![Actions Status][actions-badge]][actions-url]
 [![Go Report Card](https://goreportcard.com/badge/github.com/tarantool/go-vshard-router)](https://goreportcard.com/report/github.com/tarantool/go-vshard-router)
-[![codecov](https://codecov.io/gh/KaymeKaydex/go-vshard-router/graph/badge.svg?token=WLRWE97IT1)](https://codecov.io/gh/KaymeKaydex/go-vshard-router)
+[![Code Coverage][coverage-badge]][coverage-url]
 [![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/KaymeKaydex/go-vshard-router/master/LICENSE)
 
 Translations:
@@ -13,7 +13,7 @@ Translations:
 
 
 go-vshard-router is a library for sending requests to a sharded tarantool cluster directly,
-without using tarantool-router. This library based on [tarantool vhsard library router](https://github.com/tarantool/vshard/blob/master/vshard/router/init.lua). go-vshard-router takes a new approach to creating your cluster
+without using tarantool-router. This library based on [tarantool vhsard library router](https://github.com/tarantool/vshard/blob/master/vshard/router/init.lua) and [go-tarantool connector](https://github.com/tarantool/go-tarantool). go-vshard-router takes a new approach to creating your cluster
 
 Old cluster schema
 ```mermaid
@@ -235,3 +235,5 @@ at a load close to production
 
 [actions-badge]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml
+[coverage-badge]: https://coveralls.io/repos/github/tarantool/go-vshard-router/badge.svg?branch=master
+[coverage-url]: https://coveralls.io/github/tarantool/go-vshard-router?branch=master
