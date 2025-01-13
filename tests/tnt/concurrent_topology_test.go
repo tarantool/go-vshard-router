@@ -168,7 +168,7 @@ func TestConncurrentTopologyChange(t *testing.T) {
 			}
 
 			args := []interface{}{"arg1"}
-			_, _ = router.RouterMapCallRWImpl(ctx, "echo", args, vshardrouter.CallOpts{})
+			_, _ = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", args, vshardrouter.RouterMapCallRWOptions{})
 		}
 	}()
 

@@ -539,21 +539,6 @@ func (r *storageRefResponseProto) DecodeMsgpack(d *msgpack.Decoder) error {
 	return nil
 }
 
-// RouterMapCallRWImpl perform call function on all masters in the cluster
-// with a guarantee that in case of success it was executed with all
-// buckets being accessible for reads and writes.
-// Deprecated: RouterMapCallRWImpl is deprecated.
-// Use more general RouterMapCallRW instead.
-func (r *Router) RouterMapCallRWImpl(
-	ctx context.Context,
-	fnc string,
-	args interface{},
-	opts CallOpts,
-) (map[string]interface{}, error) {
-	// nolint:gosimple
-	return RouterMapCallRW[interface{}](r, ctx, fnc, args, RouterMapCallRWOptions{Timeout: opts.Timeout})
-}
-
 type replicasetFuture struct {
 	// replicaset name
 	name   string

@@ -6,7 +6,7 @@ CHANGES:
 * Removed toolchain go1.23.3.
 * Refactored GetTyped interface and logic. Now we use raw msg buffer instead raw messages. Interface works and looks
   like go-tarantool response.
-* ReplicaCall, RouterCallImpl methods was removed cause it works invalid and looks useless.
+* ReplicaCall, RouterCallImpl, RouterMapCallRWImpl methods was removed cause it works invalid and looks useless.
 * All PR, issue references in #XYZ format in commits older than 42f363775dfb9eaf7ec2a6ed7a999847752cec00 refer to https://github.com/KaymeKaydex/go-vshard-router.
 * VshardRouterCallMode type renamed to CallMode for simplicity.
 * StorageResultTypedFunc type removed as useless type.
