@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v2/box"
+	"github.com/tarantool/go-tarantool/v2/pool"
 	"github.com/tarantool/go-tarantool/v2/test_helpers"
 	vshardrouter "github.com/tarantool/go-vshard-router"
 	"github.com/tarantool/go-vshard-router/providers/static"
@@ -610,4 +612,30 @@ func testRouterRouteWithMode(t *testing.T, searchMode vshardrouter.BucketsSearch
 			break
 		}
 	}
+}
+
+// TestReplicaset_Pooler tests that pooler logic works ok with replicaset.
+func TestReplicaset_Pooler(t *testing.T) {
+	ctx := context.Background()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topology),
+		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+		TotalBucketCount: totalBucketCount,
+		User:             username,
+	})
+	require.Nil(t, err, "NewRouter created successfully")
+
+	t.Run("go-tarantool box module works ok with go-vshard replicaset", func(t *testing.T) {
+		// check that masters are alive
+		for _, rs := range router.RouteAll() {
+			b := box.New(pool.NewConnectorAdapter(rs.Pooler(), pool.RW))
+			require.NotNil(t, b)
+
+			info, err := b.Info()
+			require.NoError(t, err, "master respond info")
+			require.False(t, info.RO, "it is not RO")
+		}
+	})
 }

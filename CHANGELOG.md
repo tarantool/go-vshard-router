@@ -1,5 +1,10 @@
 ## Unreleased
 
+FEATURES:
+
+* Implemented Pooler method that returns go-tarantool Pooler interface. That can be used by some go-tarantool modules(
+  like box).
+
 BUG FIXES:
 
 * ClusterBootstrap: eliminate direct access to r.idToReplicaset.
