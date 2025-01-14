@@ -71,14 +71,14 @@ graph TD
 With [Go module](https://github.com/golang/go/wiki/Modules) support, simply add the following import
 
 ```
-import "github.com/tarantool/go-vshard-router"
+import "github.com/tarantool/go-vshard-router/v2"
 ```
 to your code, and then `go [build|run|test]` will automatically fetch the necessary dependencies.
 
 Otherwise, run the following Go command to install the `go-vshard-router` package:
 
 ```sh
-$ go get -u github.com/tarantool/go-vshard-router
+$ go get -u github.com/tarantool/go-vshard-router/v2
 ```
 
 ### Running Go-Vshard-Router
@@ -95,7 +95,7 @@ import (
   "time"
 
   vshardrouter "github.com/tarantool/go-vshard-router"
-  "github.com/tarantool/go-vshard-router/providers/static"
+  "github.com/tarantool/go-vshard-router/v2/providers/static"
 
   "github.com/google/uuid"
   "github.com/tarantool/go-tarantool/v2"

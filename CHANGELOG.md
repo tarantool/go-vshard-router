@@ -1,4 +1,14 @@
-## Unreleased
+## v2.0.0
+
+We are excited to announce the release of version v2!
+This major update was necessary due to the initial design of interfaces that were either incorrect or redundant.
+In addition, we have fully adapted to work with Tarantool 3,
+eliminating the dependency on UUID-based replica sets and instances.
+While you can still use these elements for supplementary information, they are no longer mandatory.
+The update also includes changes to several previously public methods,
+which were not intended to be exposed in the original vshard implementation.
+We would like to express our gratitude to everyone who shared their migration issues with us,
+as your feedback was invaluable in shaping the current state of the interfaces.
 
 FEATURES:
 

@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
-	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/static"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	"github.com/tarantool/go-vshard-router/v2/providers/static"
 )
 
 func TestReplicsetCallAsync(t *testing.T) {

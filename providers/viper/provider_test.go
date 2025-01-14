@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/viper"
 	_ "github.com/spf13/viper/remote"
 	"github.com/stretchr/testify/require"
-	vprovider "github.com/tarantool/go-vshard-router/providers/viper"
+	vprovider "github.com/tarantool/go-vshard-router/v2/providers/viper"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/server/v3/embed"
 )

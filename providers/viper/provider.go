@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 	srcviper "github.com/spf13/viper"
-	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/viper/moonlibs"
-	"github.com/tarantool/go-vshard-router/providers/viper/tarantool3"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	"github.com/tarantool/go-vshard-router/v2/providers/viper/moonlibs"
+	"github.com/tarantool/go-vshard-router/v2/providers/viper/tarantool3"
 )
 
 // Check that provider implements TopologyProvider interface

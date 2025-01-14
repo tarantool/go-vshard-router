@@ -70,14 +70,14 @@ graph TD
 С помощью [Go module](https://github.com/golang/go/wiki/Modules) можно добавить следующий импорт
 
 ```
-import "github.com/tarantool/go-vshard-router"
+import "github.com/tarantool/go-vshard-router/v2"
 ```
 в ваш код, а затем `go [build|run|test]` автоматически получит необходимые зависимости.
 
 
 В противном случае выполните следующую команду Go, чтобы установить пакет go-vshard-router:
 ```sh
-$ go get -u github.com/tarantool/go-vshard-router
+$ go get -u github.com/tarantool/go-vshard-router/v2
 ```
 
 ### Использование Go-Vshard-Router
@@ -93,8 +93,8 @@ import (
   "strconv"
   "time"
 
-  vshardrouter "github.com/tarantool/go-vshard-router"
-  "github.com/tarantool/go-vshard-router/providers/static"
+  vshardrouter "github.com/tarantool/go-vshard-router/v2"
+  "github.com/tarantool/go-vshard-router/v2/providers/static"
 
   "github.com/google/uuid"
   "github.com/tarantool/go-tarantool/v2"
@@ -215,7 +215,7 @@ func main() {
   ![Image alt](docs/static/not-direct.png)
 
 
-[actions-badge]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml/badge.svg
+[actions-badge]: https://github.com/tarantool/go-vshard-router/v2/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/tarantool/go-vshard-router/actions/workflows/main.yml
 [coverage-badge]: https://coveralls.io/repos/github/tarantool/go-vshard-router/badge.svg?branch=master
 [coverage-url]: https://coveralls.io/github/tarantool/go-vshard-router?branch=master

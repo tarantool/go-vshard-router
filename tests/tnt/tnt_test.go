@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	vshardrouter "github.com/tarantool/go-vshard-router"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
 const (

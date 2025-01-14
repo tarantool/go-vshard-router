@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	vshardrouter "github.com/tarantool/go-vshard-router"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
 var (

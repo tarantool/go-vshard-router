@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	mockpool "github.com/tarantool/go-vshard-router/mocks/pool"
+	mockpool "github.com/tarantool/go-vshard-router/v2/mocks/pool"
 )
 
 func TestRouter_Topology(t *testing.T) {

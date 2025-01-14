@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/google/uuid"
-	vshardrouter "github.com/tarantool/go-vshard-router"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
 func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo {

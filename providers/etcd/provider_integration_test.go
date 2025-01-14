@@ -5,10 +5,11 @@ package etcd
 
 import (
 	"fmt"
-	mocktopology "github.com/tarantool/go-vshard-router/mocks/topology"
-	"go.etcd.io/etcd/client/v2"
 	"testing"
 	"time"
+
+	mocktopology "github.com/tarantool/go-vshard-router/v2/mocks/topology"
+	"go.etcd.io/etcd/client/v2"
 )
 
 func TestNewProvider(t *testing.T) {

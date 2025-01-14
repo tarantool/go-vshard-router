@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
-	vshardrouter "github.com/tarantool/go-vshard-router"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 	"go.etcd.io/etcd/client/v2"
 )
 

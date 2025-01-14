@@ -1,4 +1,4 @@
-module github.com/tarantool/go-vshard-router
+module github.com/tarantool/go-vshard-router/v2
 
 go 1.22
 
@@ -8,11 +8,12 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tarantool/go-tarantool/v2 v2.2.1
+	github.com/tarantool/go-vshard-router v1.3.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.etcd.io/etcd/client/v2 v2.305.17
 	go.etcd.io/etcd/client/v3 v3.5.17
 	go.etcd.io/etcd/server/v3 v3.5.17
-	golang.org/x/sync v0.6.0
+	golang.org/x/sync v0.10.0
 )
 
 require (

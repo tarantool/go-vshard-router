@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/static"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	"github.com/tarantool/go-vshard-router/v2/providers/static"
 )
 
 type errorTopologyProvider struct{}

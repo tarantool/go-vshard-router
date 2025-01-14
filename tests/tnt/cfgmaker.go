@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	vshardrouter "github.com/tarantool/go-vshard-router"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
 type cfgmaker struct {

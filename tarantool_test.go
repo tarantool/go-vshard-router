@@ -15,9 +15,9 @@ import (
 	"github.com/tarantool/go-tarantool/v2/box"
 	"github.com/tarantool/go-tarantool/v2/pool"
 	"github.com/tarantool/go-tarantool/v2/test_helpers"
-	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/static"
-	chelper "github.com/tarantool/go-vshard-router/test_helper"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	"github.com/tarantool/go-vshard-router/v2/providers/static"
+	chelper "github.com/tarantool/go-vshard-router/v2/test_helper"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
