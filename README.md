@@ -94,7 +94,7 @@ import (
   "strconv"
   "time"
 
-  vshardrouter "github.com/tarantool/go-vshard-router"
+  vshardrouter "github.com/tarantool/go-vshard-router/v2"
   "github.com/tarantool/go-vshard-router/v2/providers/static"
 
   "github.com/google/uuid"
