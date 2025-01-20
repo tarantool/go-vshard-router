@@ -10,6 +10,12 @@ import (
 	"go.etcd.io/etcd/client/v2"
 )
 
+var (
+	ErrNodesError     = fmt.Errorf("etcd nodes err")
+	ErrClusterError   = fmt.Errorf("etcd cluster err")
+	ErrInstancesError = fmt.Errorf("etcd instances err")
+)
+
 // Check that provider implements TopologyProvider interface
 var _ vshardrouter.TopologyProvider = (*Provider)(nil)
 
@@ -63,6 +69,7 @@ func mapCluster2Instances(replicasets []vshardrouter.ReplicasetInfo,
 	return currentTopology
 }
 
+// nolint:contextcheck
 func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo, error) {
 	resp, err := p.kapi.Get(context.TODO(), p.path, &client.GetOptions{Recursive: true})
 	if err != nil {
@@ -71,7 +78,7 @@ func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter
 	nodes := resp.Node.Nodes
 
 	if nodes.Len() < 2 {
-		return nil, fmt.Errorf("etcd path %s subnodes <2; minimum 2 (/clusters & /instances)", p.path)
+		return nil, fmt.Errorf("%w: etcd path %s subnodes <2; minimum 2 (/clusters & /instances)", ErrNodesError, p.path)
 	}
 
 	var replicasets []vshardrouter.ReplicasetInfo
@@ -83,7 +90,7 @@ func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter
 		switch filepath.Base(node.Key) {
 		case "clusters":
 			if len(node.Nodes) < 1 {
-				return nil, fmt.Errorf("etcd path %s has no clusters", node.Key)
+				return nil, fmt.Errorf("%w: etcd path %s has no clusters", ErrClusterError, node.Key)
 			}
 
 			for _, rsNode := range node.Nodes {
@@ -109,7 +116,7 @@ func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter
 			}
 		case "instances":
 			if len(node.Nodes) < 1 {
-				return nil, fmt.Errorf("etcd path %s has no instances", node.Key)
+				return nil, fmt.Errorf("%w: etcd path %s has no instances", ErrInstancesError, node.Key)
 			}
 
 			for _, instanceNode := range node.Nodes {
