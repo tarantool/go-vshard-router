@@ -29,7 +29,7 @@ const (
 )
 
 type Convertable interface {
-	Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo
+	Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo, error)
 }
 
 func NewProvider(ctx context.Context, v *srcviper.Viper, cfgType ConfigType) *Provider {
@@ -53,7 +53,10 @@ func NewProvider(ctx context.Context, v *srcviper.Viper, cfgType ConfigType) *Pr
 		panic(err)
 	}
 
-	resultMap := cfg.Convert()
+	resultMap, err := cfg.Convert()
+	if err != nil {
+		panic(err)
+	}
 
 	return &Provider{ctx: ctx, v: v, rs: resultMap}
 }

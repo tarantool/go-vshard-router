@@ -1,10 +1,20 @@
 package tarantool3
 
 import (
+	"fmt"
+
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
-func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo {
+func (cfg *Config) Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo, error) {
+	if cfg.Groups.Storages == nil {
+		return nil, fmt.Errorf("cant get groups storage from etcd")
+	}
+
+	if cfg.Groups.Storages.Replicasets == nil {
+		return nil, fmt.Errorf("cant get storage replicasets from etcd")
+	}
+
 	m := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo)
 
 	for rsName, rs := range cfg.Groups.Storages.Replicasets {
@@ -21,5 +31,5 @@ func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.Inst
 		m[rsInfo] = instances
 	}
 
-	return m
+	return m, nil
 }
