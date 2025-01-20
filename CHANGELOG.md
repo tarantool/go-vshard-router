@@ -1,3 +1,8 @@
+## Unreleased
+
+BUG FIXES:
+- Fixed go.mod and go.sum files with go mod tidy.
+
 ## v2.0.0
 
 We are excited to announce the release of version v2!

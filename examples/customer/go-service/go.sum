@@ -96,6 +96,7 @@ github.com/tarantool/go-tarantool/v2 v2.1.1-0.20240507091106-8b2be0133e9d h1:L8E
 github.com/tarantool/go-tarantool/v2 v2.1.1-0.20240507091106-8b2be0133e9d/go.mod h1:hjm1qFxll+hs9VoU74MrvwKrXZKv8WGQLhkyeDTHh7Y=
 github.com/tarantool/go-tarantool/v2 v2.1.1-0.20240922082035-592db69eed86/go.mod h1:hjm1qFxll+hs9VoU74MrvwKrXZKv8WGQLhkyeDTHh7Y=
 github.com/tarantool/go-tarantool/v2 v2.2.1/go.mod h1:hKKeZeCP8Y8+U6ZFS32ot1jHV/n4WKVP4fjRAvQznMY=
+github.com/tarantool/go-vshard-router v1.3.2/go.mod h1:+ZRedQeNcP5EUjtQg2BKHS9b40u2A3V+IEo2QqTpKJY=
 github.com/vmihailenco/msgpack/v5 v5.3.5 h1:5gO0H1iULLWGhs2H5tbAHIZTV8/cYafcFOr9znI5mJU=
 github.com/vmihailenco/msgpack/v5 v5.3.5/go.mod h1:7xyJ9e+0+9SaZT0Wt1RGleJXzli6Q/V5KbhBonMG9jc=
 github.com/vmihailenco/msgpack/v5 v5.4.1/go.mod h1:GaZTsDaehaPpQVyxrf5mtQlH+pc21PIudVV/E3rRQok=
@@ -115,6 +116,7 @@ golang.org/x/net v0.19.0/go.mod h1:CfAk/cbD4CthTvqiEl8NpboMuiuOYsAr/7NOjZJtv1U=
 golang.org/x/net v0.23.0/go.mod h1:JKghWKKOSdJwpW2GEx0Ja7fmaKnMsbu+MWVZTokSYmg=
 golang.org/x/sync v0.6.0 h1:5BMeUDZ7vkXGfEr1x9B4bRcTH4lpkTkpdh0T/J+qjbQ=
 golang.org/x/sync v0.6.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
+golang.org/x/sync v0.10.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
 golang.org/x/sys v0.0.0-20201119102817-f84b799fce68/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210420072515-93ed5bcd2bfe/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.15.0 h1:h48lPFYpsTvQJZF4EKyI4aLHaev3CxivZmv7yZig9pc=

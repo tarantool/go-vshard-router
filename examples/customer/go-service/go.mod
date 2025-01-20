@@ -7,7 +7,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/swaggo/swag v1.16.3
 	github.com/tarantool/go-tarantool/v2 v2.2.1
-	github.com/tarantool/go-vshard-router v0.0.9
+	github.com/tarantool/go-vshard-router v1.3.2
 )
 
 require (
@@ -40,7 +40,7 @@ require (
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.23.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
