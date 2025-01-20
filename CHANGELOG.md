@@ -3,6 +3,10 @@
 BUG FIXES:
 - Fixed go.mod and go.sum files with go mod tidy.
 
+TESTS:
+
+- Added etcd v2 provider tests.
+
 ## v2.0.1
 
 in the v2.0.0 release there was a bug that did not allow go-get. Updating to v2 requires changing the module name
