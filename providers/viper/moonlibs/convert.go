@@ -1,19 +1,20 @@
 package moonlibs
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/google/uuid"
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
-func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo {
+func (cfg *Config) Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo, error) {
 	if cfg.Topology.Instances == nil {
-		panic("instances is nil")
+		return nil, fmt.Errorf("no topology instances found")
 	}
 
 	if cfg.Topology.Clusters == nil {
-		panic("clusters is nil")
+		return nil, fmt.Errorf("no topology clusters found")
 	}
 
 	// prepare vshard router config
@@ -22,7 +23,7 @@ func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.Inst
 	for rsName, rs := range cfg.Topology.Clusters {
 		rsUUID, err := uuid.Parse(rs.ReplicasetUUID)
 		if err != nil {
-			panic("Can't parse replicaset uuid: %s")
+			return nil, fmt.Errorf("invalid topology replicaset UUID: %s", rs.ReplicasetUUID)
 		}
 
 		rsInstances := make([]vshardrouter.InstanceInfo, 0)
@@ -36,7 +37,7 @@ func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.Inst
 			if err != nil {
 				log.Printf("Can't parse replicaset uuid: %s", err)
 
-				panic(err)
+				return nil, fmt.Errorf("invalid topology instance UUID: %s", instInfo.Box.InstanceUUID)
 			}
 
 			rsInstances = append(rsInstances, vshardrouter.InstanceInfo{
@@ -51,5 +52,5 @@ func (cfg *Config) Convert() map[vshardrouter.ReplicasetInfo][]vshardrouter.Inst
 		}] = rsInstances
 	}
 
-	return vshardRouterTopology
+	return vshardRouterTopology, nil
 }

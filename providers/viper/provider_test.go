@@ -132,17 +132,50 @@ func TestNewProvider_ETCD3(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, getResponse.Kvs[0].Value)
 
-	etcdViper := viper.New()
-	err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", key)
-	require.NoError(t, err)
+	t.Run("ok reads config", func(t *testing.T) {
+		etcdViper := viper.New()
+		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", key)
+		require.NoError(t, err)
 
-	etcdViper.SetConfigType("yaml")
-	err = etcdViper.ReadRemoteConfig()
-	require.NoError(t, err)
+		etcdViper.SetConfigType("yaml")
+		err = etcdViper.ReadRemoteConfig()
+		require.NoError(t, err)
 
-	provider := vprovider.NewProvider(ctx, etcdViper, vprovider.ConfigTypeTarantool3)
+		provider := vprovider.NewProvider(ctx, etcdViper, vprovider.ConfigTypeTarantool3)
+		anyProviderValidation(t, provider)
+	})
 
-	anyProviderValidation(t, provider)
+	t.Run("invalid path", func(t *testing.T) {
+		etcdViper := viper.New()
+
+		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", "/some-invalid-path")
+		require.NoError(t, err)
+
+		etcdViper.SetConfigType("yaml")
+
+		err = etcdViper.ReadRemoteConfig()
+		require.Error(t, err, "path not found error")
+	})
+
+	t.Run("invalid config panics", func(t *testing.T) {
+		etcdViper := viper.New()
+
+		emptyPath := "/some-empty-path"
+
+		_, err := kv.Put(ctx, emptyPath, "")
+		require.NoError(t, err)
+
+		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", "/some-empty-path")
+		require.NoError(t, err)
+
+		etcdViper.SetConfigType("yaml")
+		err = etcdViper.ReadRemoteConfig()
+		require.NoError(t, err)
+
+		require.Panics(t, func() {
+			vprovider.NewProvider(ctx, etcdViper, vprovider.ConfigTypeTarantool3)
+		})
+	})
 }
 
 func anyProviderValidation(t testing.TB, provider *vprovider.Provider) {
