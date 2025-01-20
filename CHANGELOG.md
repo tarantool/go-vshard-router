@@ -12,6 +12,7 @@ TESTS:
 
 - Added etcd v2 provider tests.
 - Add test for degraded cluster (TestDegradedCluster).
+- Add more tests for etcd v3 viper provider.
 
 ## v2.0.1
 
