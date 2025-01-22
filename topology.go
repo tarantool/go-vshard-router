@@ -130,13 +130,11 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 		r.log().Infof(ctx, "[replicaset %s ] instance %s %s in role %s", rsInfo, instName, connectStatus, instConnInfo.ConnRole)
 	}
 
-	isConnected, err := conn.ConnectedNow(pool.RW)
-	if err != nil {
-		return fmt.Errorf("cant check rs pool conntected rw now with error: %s", err)
-	}
-
-	if !isConnected {
-		return fmt.Errorf("got connected now as false, storage must be configured first")
+	switch isConnected, err := conn.ConnectedNow(pool.RW); {
+	case err != nil:
+		r.log().Errorf(ctx, "cant check rs pool conntected rw now with error: %v", err)
+	case !isConnected:
+		r.log().Errorf(ctx, "got connected now as false to pool.RW")
 	}
 
 	replicaset.conn = conn

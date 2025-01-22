@@ -241,7 +241,7 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 	err = router.DiscoveryAllBuckets(ctx)
 	if err != nil {
-		return nil, err
+		router.log().Errorf(ctx, "router.DiscoveryAllBuckets failed: %v", err)
 	}
 
 	if cfg.DiscoveryMode == DiscoveryModeOn {
@@ -255,7 +255,7 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 		router.cancelDiscovery = cancelFunc
 	}
 
-	return router, err
+	return router, nil
 }
 
 // BucketSet Set a bucket to a replicaset.

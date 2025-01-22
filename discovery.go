@@ -222,7 +222,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 
 	r.log().Infof(ctx, "Start discovery all buckets")
 
-	errGr, ctx := errgroup.WithContext(ctx)
+	var errGr errgroup.Group
 
 	view := r.getConsistentView()
 	nameToReplicasetRef := r.getNameToReplicaset()
@@ -236,6 +236,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 			for {
 				resp, err := rs.bucketsDiscovery(ctx, bucketsDiscoveryPaginationFrom)
 				if err != nil {
+					r.log().Errorf(ctx, "can't bucketsDiscovery for rs %s: %v", rs.info, err)
 					return err
 				}
 
