@@ -3,9 +3,15 @@
 BUG FIXES:
 - Fixed go.mod and go.sum files with go mod tidy.
 
+CHANGES:
+* DiscoveryAllBuckets: don't cancel requests to other replicasets if request to some replicaset failed.
+* AddReplicaset: don't fail if there are no available RW instances.
+* NewRouter: don't fail if DiscoveryAllBuckets has returned an error.
+
 TESTS:
 
 - Added etcd v2 provider tests.
+- Add test for degraded cluster (TestDegradedCluster).
 
 ## v2.0.1
 

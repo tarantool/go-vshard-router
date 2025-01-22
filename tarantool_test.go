@@ -639,3 +639,48 @@ func TestReplicaset_Pooler(t *testing.T) {
 		}
 	})
 }
+
+func TestDegradedCluster(t *testing.T) {
+	ctx := context.Background()
+
+	// create a topology to imitate cluster with several replicasets:
+	// 1 fake replicaset (imitates an unavailable replicaset) + all replicasets of topology
+	topologyDegraded := map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo{
+		{
+			// add fake replicaset
+			Name:   "storage_0",
+			UUID:   uuid.New(),
+			Weight: 1,
+		}: {
+			{
+				Name: "storage_0_a",
+				UUID: uuid.New(),
+				Addr: "127.0.0.1:2998",
+			},
+			{
+				Name: "storage_0_b",
+				UUID: uuid.New(),
+				Addr: "127.0.0.1:2999",
+			},
+		},
+	}
+
+	// add all replicasets of topology
+	for k, v := range topology {
+		topologyDegraded[k] = v
+	}
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topologyDegraded),
+		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+		TotalBucketCount: totalBucketCount,
+		User:             username,
+	})
+	require.NoError(t, err, "NewRouter created successfully")
+
+	for bucketID := uint64(1); bucketID <= totalBucketCount; bucketID++ {
+		_, err := router.Route(ctx, bucketID)
+		require.NoErrorf(t, err, "bucket %d resolved successfully")
+	}
+}
