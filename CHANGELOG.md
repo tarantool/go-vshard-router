@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v2.0.2
+
 FEATURES:
 - Slog provider is available now. Use NewSlogLogger for slog log provider creation.
 
