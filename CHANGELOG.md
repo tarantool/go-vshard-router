@@ -3,22 +3,20 @@
 ## v2.0.2
 
 FEATURES:
-- Slog provider is available now. Use NewSlogLogger for slog log provider creation.
+* Slog provider is available now. Use NewSlogLogger for slog log provider creation.
 
 BUG FIXES:
-- Fixed go.mod and go.sum files with go mod tidy.
-
-CHANGES:
+* Fixed go.mod and go.sum files with go mod tidy.
 * DiscoveryAllBuckets: don't cancel requests to other replicasets if request to some replicaset failed.
 * AddReplicaset: don't fail if there are no available RW instances.
 * NewRouter: don't fail if DiscoveryAllBuckets has returned an error.
 
 TESTS:
 
-- Added etcd v2 provider tests.
-- Add test for degraded cluster (TestDegradedCluster).
-- Add more tests for etcd v3 viper provider.
-- Add tests and correct panics for invalid topology config from viper.
+* Added etcd v2 provider tests.
+* Add test for degraded cluster (TestDegradedCluster).
+* Add more tests for etcd v3 viper provider.
+* Add tests and correct panics for invalid topology config from viper.
 
 ## v2.0.1
 
