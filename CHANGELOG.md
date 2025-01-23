@@ -1,5 +1,8 @@
 ## Unreleased
 
+FEATURES:
+- Slog provider is available now. Use NewSlogLogger for slog log provider creation.
+
 BUG FIXES:
 - Fixed go.mod and go.sum files with go mod tidy.
 
