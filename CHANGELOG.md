@@ -1,5 +1,12 @@
 ## Unreleased
 
+BUG FIXES:
+* ETCD v2 provider validates replicaset result count and make error if replicasets count == 0 (#40).
+
+TESTS:
+* Fixed invalid TopologyProvider mock signature after v2.0.0 (#40).
+* provider_integration_test.go for etcd v2 provider was removed as useless (#40).
+
 ## v2.0.2
 
 FEATURES:

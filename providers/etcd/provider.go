@@ -14,6 +14,7 @@ var (
 	ErrNodesError     = fmt.Errorf("etcd nodes err")
 	ErrClusterError   = fmt.Errorf("etcd cluster err")
 	ErrInstancesError = fmt.Errorf("etcd instances err")
+	ErrInvalidUUID    = fmt.Errorf("invalid uuid")
 )
 
 // Check that provider implements TopologyProvider interface
@@ -138,7 +139,8 @@ func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter
 							case "instance_uuid":
 								instance.UUID, err = uuid.Parse(boxNode.Value)
 								if err != nil {
-									return nil, fmt.Errorf("cant parse for instance uuid %s", boxNode.Value)
+									return nil, fmt.Errorf("%w: cant parse for instance uuid %s",
+										ErrInvalidUUID, boxNode.Value)
 								}
 							}
 						}
@@ -148,6 +150,10 @@ func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter
 		default:
 			continue
 		}
+	}
+
+	if replicasets == nil {
+		return nil, fmt.Errorf("empty replicasets")
 	}
 
 	currentTopology := mapCluster2Instances(replicasets, instances)
