@@ -82,6 +82,7 @@ func BenchmarkRouterBucketIDStrCRC32(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		vshardrouter.BucketIDStrCRC32("test_bench_key", uint64(256000))
 	}
+	b.ReportAllocs()
 }
 
 func TestInstanceInfo_Validate(t *testing.T) {

@@ -346,15 +346,17 @@ func validateCfg(cfg Config) error {
 // -- Other
 // --------------------------------------------------------------------------------
 
+var h = crc.NewHash(&crc.Parameters{
+	Width:      32,
+	Polynomial: 0x1EDC6F41,
+	FinalXor:   0x0,
+	ReflectIn:  true,
+	ReflectOut: true,
+	Init:       0xFFFFFFFF,
+})
+
 func BucketIDStrCRC32(shardKey string, totalBucketCount uint64) uint64 {
-	return crc.CalculateCRC(&crc.Parameters{
-		Width:      32,
-		Polynomial: 0x1EDC6F41,
-		FinalXor:   0x0,
-		ReflectIn:  true,
-		ReflectOut: true,
-		Init:       0xFFFFFFFF,
-	}, []byte(shardKey))%totalBucketCount + 1
+	return h.CalculateCRC([]byte(shardKey))%totalBucketCount + 1
 }
 
 // BucketIDStrCRC32 return the bucket identifier from the parameter used for sharding.

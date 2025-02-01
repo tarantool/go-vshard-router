@@ -1,5 +1,8 @@
 ## Unreleased
 
+FEATURES:
+* Optimized crc32 hash function (#45).
+
 BUG FIXES:
 * ETCD v2 provider validates replicaset result count and make error if replicasets count == 0 (#40).
 
