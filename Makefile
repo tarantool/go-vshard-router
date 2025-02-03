@@ -29,21 +29,14 @@ ifeq ($(wildcard $(GOLANGCI_BIN)),)
 	$(GO_CMD) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_TAG)
 endif
 
-prepare-tnt:
-	@$(MAKE) -C ./tests/tnt prepare
-
-test: prepare-tnt
+test:
 	tt rocks install vshard 0.1.26
-	export START_PORT=33000
-	export NREPLICASETS=5
 	$(GO_CMD) test ./... -race -parallel=10 -timeout=$(TEST_TIMEOUT) -covermode=atomic -coverprofile=coverage.out.tmp -coverpkg="./..."
 	@cat coverage.out.tmp | grep -v "mock" > coverage.out
 	@rm coverage.out.tmp
-	@$(MAKE) -C ./tests/tnt cluster-down
 
 cover: test ## Generate and open the HTML report for test coverage.
 	 $(GO_CMD) tool cover -html=coverage.out
-
 
 generate/mocks:
 	mockery --name=Pool --case=underscore --output=mocks/pool --outpkg=mockpool # need fix it later
@@ -57,6 +50,3 @@ testrace: BUILD_TAGS+=testonly
 testrace:
 	@CGO_ENABLED=1 \
 	$(GO_CMD) test -tags='$(BUILD_TAGS)' -race  -timeout=$(EXTENDED_TEST_TIMEOUT) -parallel=20
-
-test/tnt:
-	@$(MAKE) -C ./tests/tnt
