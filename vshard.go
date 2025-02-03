@@ -382,6 +382,7 @@ func (r *Router) BucketCount() uint64 {
 // it will return the last error encountered. If ifNotBootstrapped is false, any
 // error will result in an immediate return, ensuring that the operation either
 // succeeds fully or fails fast.
+// Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
 	nameToReplicasetRef := r.getNameToReplicaset()
 

@@ -101,65 +101,6 @@ var noUUIDTopology = map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo
 	},
 }
 
-func runTestMain(m *testing.M) int {
-	dialers := make([]tarantool.NetDialer, instancesCount)
-	opts := make([]test_helpers.StartOpts, instancesCount)
-
-	i := 0
-	for name, addr := range serverNames {
-		dialers[i] = tarantool.NetDialer{
-			Address: addr,
-			User:    username,
-		}
-
-		opts[i] = test_helpers.StartOpts{
-			Dialer:       dialers[i],
-			InitScript:   "config.lua",
-			Listen:       addr,
-			WaitStart:    100 * time.Millisecond,
-			ConnectRetry: 100,
-			RetryTimeout: 500 * time.Millisecond,
-			WorkDir:      name, // this is not wrong
-		}
-
-		i++
-	}
-
-	instances, err := chelper.StartTarantoolInstances(opts)
-	defer test_helpers.StopTarantoolInstances(instances)
-	if err != nil {
-		log.Printf("Failed to prepare test Tarantool: %s", err)
-		return 1
-	}
-
-	return m.Run()
-}
-
-func TestMain(m *testing.M) {
-	code := runTestMain(m)
-	os.Exit(code)
-}
-
-func TestRouter_ClusterBootstrap(t *testing.T) {
-	ctx := context.Background()
-
-	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
-		TotalBucketCount: totalBucketCount,
-		TopologyProvider: static.NewProvider(topology),
-		User:             username,
-	})
-	require.NotNil(t, router)
-	require.NoError(t, err)
-
-	err = router.ClusterBootstrap(ctx, false)
-	require.NoError(t, err)
-	for _, rs := range router.RouteAll() {
-		count, err := rs.BucketsCount(ctx)
-		require.NoError(t, err)
-		require.NotEqual(t, count, uint64(0))
-	}
-}
-
 // for tarantool 3.0 uuid is not required
 func TestNewRouter_IgnoreUUID(t *testing.T) {
 	ctx := context.Background()
@@ -383,9 +324,6 @@ func BenchmarkCallSimpleInsert_GO_Call(b *testing.B) {
 	})
 	require.NoError(b, err)
 
-	err = router.ClusterBootstrap(ctx, true)
-	require.NoError(b, err)
-
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		id := uuid.New()
@@ -416,9 +354,6 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 		TotalBucketCount: totalBucketCount,
 		User:             username,
 	})
-	require.NoError(b, err)
-
-	err = router.ClusterBootstrap(ctx, true)
 	require.NoError(b, err)
 
 	ids := make([]uuid.UUID, b.N)
@@ -464,6 +399,109 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 		b.StopTimer()
 		require.NoError(b, err1)
 		require.NoError(b, err2)
+		b.StartTimer()
+	}
+
+	b.ReportAllocs()
+}
+
+func BenchmarkCallSimpleInsert_Lua(b *testing.B) {
+	b.StopTimer()
+
+	ctx := context.Background()
+	dialer := tarantool.NetDialer{
+		Address: "0.0.0.0:12000",
+	}
+
+	instances := []pool.Instance{{
+		Name:   "router",
+		Dialer: dialer,
+	}}
+
+	p, err := pool.Connect(ctx, instances)
+	require.NoError(b, err)
+	require.NotNil(b, p)
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		id := uuid.New()
+		req := tarantool.NewCallRequest("api.add_product").
+			Context(ctx).
+			Args([]interface{}{&Product{Name: "test-lua", ID: id.String(), Count: 3}})
+
+		feature := p.Do(req, pool.ANY)
+		faces, err := feature.Get()
+
+		require.NoError(b, err)
+		require.NotNil(b, faces)
+	}
+
+	b.ReportAllocs()
+}
+
+func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
+	b.StopTimer()
+
+	ctx := context.Background()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topology),
+		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+		TotalBucketCount: totalBucketCount,
+		User:             username,
+	})
+	require.NoError(b, err)
+
+	ids := make([]uuid.UUID, b.N)
+
+	for i := 0; i < b.N; i++ {
+		id := uuid.New()
+		ids[i] = id
+
+		bucketID := router.BucketIDStrCRC32(id.String())
+		_, err := router.Call(
+			ctx,
+			bucketID,
+			vshardrouter.CallModeRW,
+			"product_add",
+			[]interface{}{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
+			vshardrouter.CallOpts{})
+		require.NoError(b, err)
+	}
+
+	type Request struct {
+		ID string `msgpack:"id"`
+	}
+
+	dialer := tarantool.NetDialer{
+		Address: "0.0.0.0:12000",
+		User:    username,
+	}
+
+	instances := []pool.Instance{{
+		Name:   "router",
+		Dialer: dialer,
+	}}
+
+	p, err := pool.Connect(ctx, instances)
+	require.NoError(b, err)
+	require.NotNil(b, p)
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		id := ids[i]
+
+		req := tarantool.NewCallRequest("api.get_product").
+			Context(ctx).
+			Args([]interface{}{&Request{ID: id.String()}})
+
+		feature := p.Do(req, pool.ANY)
+		var product Product
+		err = feature.GetTyped(&[]interface{}{&product})
+
+		b.StopTimer()
+		require.NoError(b, err)
 		b.StartTimer()
 	}
 
@@ -683,4 +721,165 @@ func TestDegradedCluster(t *testing.T) {
 		_, err := router.Route(ctx, bucketID)
 		require.NoErrorf(t, err, "bucket %d resolved successfully")
 	}
+}
+
+func TestReplicsetCallAsync(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topology),
+		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
+		TotalBucketCount: totalBucketCount,
+		User:             username,
+	})
+
+	require.Nil(t, err, "NewRouter finished successfully")
+
+	rsMap := router.RouteAll()
+
+	var rs *vshardrouter.Replicaset
+	// pick random rs
+	for _, v := range rsMap {
+		rs = v
+		break
+	}
+
+	callOpts := vshardrouter.ReplicasetCallOpts{
+		PoolMode: pool.ANY,
+	}
+
+	// Tests for arglen ans response parsing
+	future := rs.CallAsync(ctx, callOpts, "echo", nil)
+	resp, err := future.Get()
+	require.Nil(t, err, "CallAsync finished with no err on nil args")
+	require.Equal(t, resp, []interface{}{}, "CallAsync returns empty arr on nil args")
+	var typed interface{}
+	err = future.GetTyped(&typed)
+	require.Nil(t, err, "GetTyped finished with no err on nil args")
+	require.Equal(t, []interface{}{}, resp, "GetTyped returns empty arr on nil args")
+
+	const checkUpTo = 100
+	for argLen := 1; argLen <= checkUpTo; argLen++ {
+		args := []interface{}{}
+
+		for i := 0; i < argLen; i++ {
+			args = append(args, "arg")
+		}
+
+		future := rs.CallAsync(ctx, callOpts, "echo", args)
+		resp, err := future.Get()
+		require.Nilf(t, err, "CallAsync finished with no err for argLen %d", argLen)
+		require.Equalf(t, args, resp, "CallAsync resp ok for argLen %d", argLen)
+
+		var typed interface{}
+		err = future.GetTyped(&typed)
+		require.Nilf(t, err, "GetTyped finished with no err for argLen %d", argLen)
+		require.Equal(t, args, typed, "GetTyped resp ok for argLen %d", argLen)
+	}
+
+	// Test for async execution
+	timeBefore := time.Now()
+
+	var futures = make([]*tarantool.Future, 0, len(rsMap))
+	for _, rs := range rsMap {
+		future := rs.CallAsync(ctx, callOpts, "sleep", []interface{}{1})
+		futures = append(futures, future)
+	}
+
+	for i, future := range futures {
+		_, err := future.Get()
+		require.Nil(t, err, "future[%d].Get finished with no err for async test", i)
+	}
+
+	duration := time.Since(timeBefore)
+	require.True(t, len(rsMap) > 1, "Async test: more than one replicaset")
+	require.Less(t, duration, 1200*time.Millisecond, "Async test: requests were sent concurrently")
+
+	// Test no timeout by default
+	future = rs.CallAsync(ctx, callOpts, "sleep", []interface{}{1})
+	_, err = future.Get()
+	require.Nil(t, err, "CallAsync no timeout by default")
+
+	// Test for timeout via ctx
+	ctxTimeout, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	future = rs.CallAsync(ctxTimeout, callOpts, "sleep", []interface{}{1})
+	_, err = future.Get()
+	require.NotNil(t, err, "CallAsync timeout by context does work")
+
+	// Test for timeout via config
+	callOptsTimeout := vshardrouter.ReplicasetCallOpts{
+		PoolMode: pool.ANY,
+		Timeout:  500 * time.Millisecond,
+	}
+	future = rs.CallAsync(ctx, callOptsTimeout, "sleep", []interface{}{1})
+	_, err = future.Get()
+	require.NotNil(t, err, "CallAsync timeout by callOpts does work")
+
+	future = rs.CallAsync(ctx, callOpts, "raise_luajit_error", nil)
+	_, err = future.Get()
+	require.NotNil(t, err, "raise_luajit_error returns error")
+
+	future = rs.CallAsync(ctx, callOpts, "raise_client_error", nil)
+	_, err = future.Get()
+	require.NotNil(t, err, "raise_client_error returns error")
+}
+
+func runTestMain(m *testing.M) int {
+	dialers := make([]tarantool.NetDialer, instancesCount)
+	opts := make([]test_helpers.StartOpts, instancesCount)
+
+	i := 0
+	for name, addr := range serverNames {
+		dialers[i] = tarantool.NetDialer{
+			Address: addr,
+			User:    username,
+		}
+
+		opts[i] = test_helpers.StartOpts{
+			Dialer:       dialers[i],
+			InitScript:   "config.lua",
+			Listen:       addr,
+			WaitStart:    100 * time.Millisecond,
+			ConnectRetry: 100,
+			RetryTimeout: 500 * time.Millisecond,
+			WorkDir:      name, // this is not wrong
+		}
+
+		i++
+	}
+
+	instances, err := chelper.StartTarantoolInstances(opts)
+	if err != nil {
+		log.Printf("Failed to prepare test Tarantool: %s", err)
+		return 1
+	}
+
+	inst, err := test_helpers.StartTarantool(test_helpers.StartOpts{
+		Dialer:       tarantool.NetDialer{Address: "0.0.0.0:12000", User: username},
+		InitScript:   "config.lua",
+		Listen:       "0.0.0.0:12000",
+		WaitStart:    100 * time.Millisecond,
+		ConnectRetry: 100,
+		RetryTimeout: 500 * time.Millisecond,
+		WorkDir:      "router",
+	})
+
+	if err != nil {
+		log.Printf("Failed to prepare test Tarantool: %s", err)
+		return 1
+	}
+
+	defer test_helpers.StopTarantoolWithCleanup(inst)
+	defer test_helpers.StopTarantoolInstances(instances)
+
+	return m.Run()
+}
+
+func TestMain(m *testing.M) {
+	code := runTestMain(m)
+	os.Exit(code)
 }

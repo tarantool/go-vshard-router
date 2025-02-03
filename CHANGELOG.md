@@ -1,21 +1,31 @@
 ## Unreleased
 
 FEATURES:
+
 * Optimized crc32 hash function (#45).
 
 BUG FIXES:
+
 * ETCD v2 provider validates replicaset result count and make error if replicasets count == 0 (#40).
 
+CHANGES:
+
+* ClusterBootstrap deprecated until #17 (#46).
+
 TESTS:
+
 * Fixed invalid TopologyProvider mock signature after v2.0.0 (#40).
 * provider_integration_test.go for etcd v2 provider was removed as useless (#40).
+* All tests and benchmarks migrated from tests/tnt (#46).
 
 ## v2.0.2
 
 FEATURES:
+
 * Slog provider is available now. Use NewSlogLogger for slog log provider creation.
 
 BUG FIXES:
+
 * Fixed go.mod and go.sum files with go mod tidy.
 * DiscoveryAllBuckets: don't cancel requests to other replicasets if request to some replicaset failed.
 * AddReplicaset: don't fail if there are no available RW instances.
@@ -59,8 +69,10 @@ CHANGES:
 * Removed toolchain go1.23.3.
 * Refactored GetTyped interface and logic. Now we use raw msg buffer instead raw messages. Interface works and looks
   like go-tarantool response.
-* ReplicaCall, RouterCallImpl, RouterMapCallRWImpl, BucketResolve, BucketDiscovery, RouterBucketID, RouterBucketIDMPCRC32 methods were removed cause they work invalid, look useless or redundant.
-* All PR, issue references in #XYZ format in commits older than 42f363775dfb9eaf7ec2a6ed7a999847752cec00 refer to https://github.com/KaymeKaydex/go-vshard-router.
+* ReplicaCall, RouterCallImpl, RouterMapCallRWImpl, BucketResolve, BucketDiscovery, RouterBucketID,
+  RouterBucketIDMPCRC32 methods were removed cause they work invalid, look useless or redundant.
+* All PR, issue references in #XYZ format in commits older than 42f363775dfb9eaf7ec2a6ed7a999847752cec00 refer
+  to https://github.com/KaymeKaydex/go-vshard-router.
 * VshardRouterCallMode type renamed to CallMode for simplicity.
 * StorageResultTypedFunc type removed as useless type.
 * Updated msgpack version from v5.3.5 to v5.4.1.
@@ -74,7 +86,7 @@ TESTS:
 
 * Write tests in tests/tnt folder are deprecated.
 * Removed empty todo tests from tests/tnt.
-* Moved TestReplicasetReplicaCall and Go benches  from tests/tnt to tarantool_test.go .
+* Moved TestReplicasetReplicaCall and Go benches from tests/tnt to tarantool_test.go .
 * TestRouterCallProto rewrote.
 * Start using constants in tarantool_test.go instead duplicate variables.
 * TestRouterMapCall moved to tarantool_test.go and renamed to TestRouter_RouterMapCallRWImpl.
