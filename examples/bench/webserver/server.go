@@ -1,81 +1,89 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
 
+	echo "echo/pkg/api"
+	prom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
 )
 
-var fooCount = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "foo_total",
-	Help: "Number of foo successfully processed.",
-})
-
-var hits = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "hits",
-	Help: "Number of requests received.",
-}, []string{"status", "path"})
-
-var respTime = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-	Name:    "response_time_seconds",
-	Help:    "Response time in seconds.",
-	Buckets: prometheus.DefBuckets, // Стандартные бакеты: [0.005, 0.01, 0.025, ..., 10]
-}, []string{"status", "path"})
+var (
+	// Create a metrics registry.
+	reg = prometheus.NewRegistry()
+)
 
 func main() {
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	slog.Info("server started")
+	// Инициализация метрик
 
-	// Регистрируем метрики в Prometheus
-	prometheus.MustRegister(fooCount, hits, respTime)
+	// Настройка прослушивания порта
+	lis, err := net.Listen("tcp", ":8081")
+	if err != nil {
+		slog.Error("can't listen port", "error", err)
+		os.Exit(1)
+	}
 
-	// Обработчик метрик
-	http.Handle("/metrics", promhttp.Handler())
+	metric := prom.NewServerMetrics(prom.WithServerHandlingTimeHistogram(prom.WithHistogramBuckets(
+		[]float64{0.00001, 0.00005, 0.0001, 0.0002, 0.0003, 0.0005, 0.0008, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 2.5, 3, 4, 5, 7, 8, 10, 15})),
+	)
+	reg.MustRegister(metric, collectors.NewGoCollector())
 
-	// Оборачиваем хендлеры в функцию измерения времени ответа
-	http.Handle("/", instrumentHandler("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits.WithLabelValues("200", r.URL.Path).Inc()
-		fooCount.Add(1)
-		fmt.Fprintf(w, "foo_total increased")
-	})))
+	// Запуск HTTP-сервера для метрик
+	go func() {
+		slog.Info("Metrics serving")
+		httpServer := &http.Server{Handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}), Addr: fmt.Sprintf("0.0.0.0:%d", 8080)}
+		if err := httpServer.ListenAndServe(); err != nil {
+			slog.Error("Unable to start a http server.")
+		}
+	}()
 
-	http.Handle("/500", instrumentHandler("/500", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits.WithLabelValues("500", r.URL.Path).Inc()
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("error"))
-	})))
+	// Создание gRPC-сервера с интеграцией с Prometheus
+	server := grpc.NewServer(
+		grpc.UnaryInterceptor(metric.UnaryServerInterceptor()), // Интерсептор для сбора метрик
+	)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	metric.InitializeMetrics(server)
+
+	echo.RegisterEchoServiceServer(server, NewEchoService())
+
+	slog.Info("starting server at :8081")
+
+	// Запуск gRPC-сервера
+	err = server.Serve(lis)
+	if err != nil {
+		slog.Error("can't serve", "error", err)
+		os.Exit(1)
+	}
 }
 
-// instrumentHandler измеряет response time и статус-код
-func instrumentHandler(path string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		rec := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
-
-		next.ServeHTTP(rec, r)
-
-		duration := time.Since(start).Seconds()
-		respTime.WithLabelValues(fmt.Sprintf("%d", rec.statusCode), path).Observe(duration)
-	})
+type EchoService struct {
+	echo.UnimplementedEchoServiceServer
 }
 
-// statusRecorder для записи статус-кода ответа
-type statusRecorder struct {
-	http.ResponseWriter
-	statusCode int
+func NewEchoService() *EchoService {
+	return &EchoService{}
 }
 
-func (rec *statusRecorder) WriteHeader(code int) {
-	rec.statusCode = code
-	rec.ResponseWriter.WriteHeader(code)
+func (e *EchoService) Echo(ctx context.Context, req *echo.EchoRequest) (*echo.EchoResponse, error) {
+	t := time.Now()
+	msg := req.GetMessage()
+	slog.Info(msg)
+
+	defer fmt.Println(time.Since(t))
+	return &echo.EchoResponse{
+		Message: msg,
+	}, nil
 }
