@@ -31,6 +31,7 @@ endif
 
 test:
 	tt rocks install vshard 0.1.26
+	tt rocks install --force-lock metrics 1.0.0
 	$(GO_CMD) test ./... -race -parallel=10 -timeout=$(TEST_TIMEOUT) -covermode=atomic -coverprofile=coverage.out.tmp -coverpkg="./..."
 	@cat coverage.out.tmp | grep -v "mock" > coverage.out
 	@rm coverage.out.tmp

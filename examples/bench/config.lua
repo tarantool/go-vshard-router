@@ -8,6 +8,15 @@ local yaml = require('yaml')
 local fio = require('fio')
 local errno = require('errno')
 
+-- METRICS
+local metrics = require('metrics')
+local http_server = require('http.server')
+
+-- Define helper functions
+local http_metrics_handler = require('metrics.plugins.prometheus').collect_http
+
+
+-- CONFIGURATION
 function read_file(path)
     local file = fio.open(path)
     if file == nil then
@@ -146,3 +155,11 @@ end
 box.once('access:v1', function()
     box.schema.user.grant('guest', 'read,write,execute', 'universe')
 end)
+
+-- Configure the metrics module
+metrics.cfg{labels = {alias = 'my-tnt-app'}}
+
+-- Run the web server
+local server = http_server.new('0.0.0.0', 8081)
+server:route({path = '/metrics'}, http_metrics_handler)
+server:start()
