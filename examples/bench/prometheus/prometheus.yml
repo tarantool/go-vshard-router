@@ -30,9 +30,10 @@ scrape_configs:
 
   # Вторая задача — сбор метрик с веб-сервера
   - job_name: 'webserver'  # Название задачи для веб-сервера
-
-    # metrics_path по умолчанию: '/metrics'
-    # scheme по умолчанию: 'http'
-
     static_configs:
-      - targets: ['webserver:8080']  # Prometheus собирает метрики с веб-сервера по адресу webserver:8080
+      - targets:
+        - 'webserver:8080'  # Prometheus собирает метрики с веб-сервера по адресу webserver:8080
+  # Вторая задача — сбор метрик с веб-сервера
+  - job_name: 'tarantool'  # Название задачи для веб-сервера
+    static_configs:
+      - targets: ['tarantool-router:8081', 'tarantool-storage-1-a:8081', 'tarantool-storage-1-b:8081', 'tarantool-storage-2-a:8081', 'tarantool-storage-2-b:8081']
