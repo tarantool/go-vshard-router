@@ -45,7 +45,6 @@ linters:
     - ineffassign
     - revive
     - typecheck
-    - exportloopref
     - prealloc
     # - wls # excluded from linters list because produces too many noise
     - staticcheck

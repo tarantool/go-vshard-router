@@ -25,24 +25,7 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
-// This data struct is instroduced by https://github.com/tarantool/go-vshard-router/issues/39.
-// We use an array of atomics to lock-free handling elements of routeMap.
-// knownBucketCount reflects a statistic over routeMap.
-// knownBucketCount might be inconsistent for a few mksecs, because at first we change routeMap[bucketID],
-// only after that we change knownBucketCount: this is not an atomic change of complex state.
-// It it is not a problem at all.
-//
-// While changing `knownBucketCount` we heavily rely on commutative property of algebraic sum operation ("+"),
-// due to this property we don't afraid any amount of concurrent modifications.
-// See: https://en.wikipedia.org/wiki/Commutative_property
-//
-// Since RouteMapClean creates a new routeMap, we have to assign knownBucketCount := 0.
-// But assign is not a commutative operation, therefore we have to create a completely new atomic variable,
-// that reflects a statistic over newly created routeMap.
-type consistentView struct {
-	routeMap         []atomic.Pointer[Replicaset]
-	knownBucketCount atomic.Int32
-}
+type routeMap = []atomic.Pointer[Replicaset]
 
 type Router struct {
 	cfg Config
@@ -57,8 +40,7 @@ type Router struct {
 	nameToReplicasetMutex sync.RWMutex
 	nameToReplicaset      map[string]*Replicaset
 
-	viewMutex sync.RWMutex
-	view      *consistentView
+	routeMap atomic.Pointer[routeMap]
 
 	// ----------------------- Map-Reduce -----------------------
 	// Storage Ref ID. It must be unique for each ref request
@@ -76,18 +58,13 @@ func (r *Router) log() LogfProvider {
 	return r.cfg.Loggerf
 }
 
-func (r *Router) getConsistentView() *consistentView {
-	r.viewMutex.RLock()
-	view := r.view
-	r.viewMutex.RUnlock()
-
-	return view
+func (r *Router) getRouteMap() routeMap {
+	ptr := r.routeMap.Load()
+	return *ptr
 }
 
-func (r *Router) setConsistentView(view *consistentView) {
-	r.viewMutex.Lock()
-	r.view = view
-	r.viewMutex.Unlock()
+func (r *Router) setRouteMap(routeMap routeMap) {
+	r.routeMap.Store(&routeMap)
 }
 
 type Config struct {
@@ -227,10 +204,8 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	router := &Router{
 		cfg:              cfg,
 		nameToReplicaset: make(map[string]*Replicaset),
-		view: &consistentView{
-			routeMap: make([]atomic.Pointer[Replicaset], cfg.TotalBucketCount+1),
-		},
 	}
+	router.setEmptyRouteMap()
 
 	err = cfg.TopologyProvider.Init(router.Topology())
 	if err != nil {
@@ -267,33 +242,28 @@ func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) 
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
 
-	view := r.getConsistentView()
-
-	if oldRs := view.routeMap[bucketID].Swap(rs); oldRs == nil {
-		view.knownBucketCount.Add(1)
-	}
+	routeMap := r.getRouteMap()
+	routeMap[bucketID].Store(rs)
 
 	return rs, nil
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	view := r.getConsistentView()
-
 	if bucketID > r.cfg.TotalBucketCount {
 		return
 	}
 
-	if old := view.routeMap[bucketID].Swap(nil); old != nil {
-		view.knownBucketCount.Add(-1)
-	}
+	routeMap := r.getRouteMap()
+	routeMap[bucketID].Store(nil)
 }
 
 func (r *Router) RouteMapClean() {
-	newView := &consistentView{
-		routeMap: make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1),
-	}
+	r.setEmptyRouteMap()
+}
 
-	r.setConsistentView(newView)
+func (r *Router) setEmptyRouteMap() {
+	routeMap := make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
+	r.setRouteMap(routeMap)
 }
 
 func prepareCfg(ctx context.Context, cfg Config) (Config, error) {

@@ -51,9 +51,9 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
 	}
 
-	view := r.getConsistentView()
+	routeMap := r.getRouteMap()
 
-	rs := view.routeMap[bucketID].Load()
+	rs := routeMap[bucketID].Load()
 	if rs != nil {
 		return rs, nil
 	}
@@ -127,7 +127,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/consts.lua#L37
 func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
 	nameToReplicasetRef := r.getNameToReplicaset()
-	view := r.getConsistentView()
+	routeMap := r.getRouteMap()
 
 	type rsFuture struct {
 		rs     *Replicaset
@@ -161,9 +161,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 				rs = rsFuture.rs
 			}
 
-			if old := view.routeMap[bucketID].Swap(rs); old == nil {
-				view.knownBucketCount.Add(1)
-			}
+			routeMap[bucketID].Store(rs)
 		}
 
 		if bucketIDWasFound := rs != nil; !bucketIDWasFound {
@@ -184,18 +182,14 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 
 // DiscoveryHandleBuckets arrange downloaded buckets to the route map so as they reference a given replicaset.
 func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buckets []uint64) {
-	view := r.getConsistentView()
+	routeMap := r.getRouteMap()
 	removedFrom := make(map[*Replicaset]int)
 
 	for _, bucketID := range buckets {
-		oldRs := view.routeMap[bucketID].Swap(rs)
+		oldRs := routeMap[bucketID].Swap(rs)
 
 		if oldRs == rs {
 			continue
-		}
-
-		if oldRs == nil {
-			view.knownBucketCount.Add(1)
 		}
 
 		// We don't check oldRs for nil here, because it's a valid key too (if rs == nil, it means removed from unknown buckets set)
@@ -224,7 +218,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 
 	var errGr errgroup.Group
 
-	view := r.getConsistentView()
+	routeMap := r.getRouteMap()
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	for _, rs := range nameToReplicasetRef {
@@ -236,15 +230,18 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 			for {
 				resp, err := rs.bucketsDiscovery(ctx, bucketsDiscoveryPaginationFrom)
 				if err != nil {
-					r.log().Errorf(ctx, "can't bucketsDiscovery for rs %s: %v", rs.info, err)
+					r.log().Errorf(ctx, "Can't bucketsDiscovery for rs %s: %v", rs.info, err)
 					return err
 				}
 
 				for _, bucketID := range resp.Buckets {
-					// We could check here that bucketID is in range [1, TotalBucketCnt], but it seems to be redundant.
-					if old := view.routeMap[bucketID].Swap(rs); old == nil {
-						view.knownBucketCount.Add(1)
+					if bucketID > r.cfg.TotalBucketCount {
+						r.log().Errorf(ctx, "Ignoring got bucketID is out of range: %d (length %d)",
+							bucketID, r.cfg.TotalBucketCount)
+						continue
 					}
+
+					routeMap[bucketID].Store(rs)
 				}
 
 				// There are no more buckets
