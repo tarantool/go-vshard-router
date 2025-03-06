@@ -1,7 +1,6 @@
 package vshard_router //nolint:revive
 
 import (
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,9 +29,6 @@ func TestRouter_RouterBucketCount(t *testing.T) {
 func TestRouter_RouteMapClean(t *testing.T) {
 	r := Router{
 		cfg: Config{TotalBucketCount: 10},
-		view: &consistentView{
-			routeMap: make([]atomic.Pointer[Replicaset], 10),
-		},
 	}
 
 	require.NotPanics(t, func() {
