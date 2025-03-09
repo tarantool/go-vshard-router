@@ -9,12 +9,6 @@ local vshard = require 'vshard'
 local NAME = os.getenv("TEST_TNT_WORK_DIR")
 local fiber = require('fiber')
 
--- Check if we are running under test-run
-if os.getenv('ADMIN') then
-    test_run = require('test_run').new()
-    require('console').listen(os.getenv('ADMIN'))
-end
-
 -- Call a configuration provider
 local cfg = {
      sharding = {
