@@ -14,7 +14,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/spf13/viper"
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	viper2 "github.com/tarantool/go-vshard-router/v2/providers/viper"
 	"google.golang.org/grpc"
 )
 
@@ -23,6 +25,10 @@ var (
 	reg    = prometheus.NewRegistry()
 	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 )
+
+type Config struct {
+	Storages map[string]string `json:"storages"`
+}
 
 func main() {
 	ctx := context.Background()
@@ -38,6 +44,40 @@ func main() {
 	}
 
 	slog.Info("reading config file", "from", configFile)
+
+	cfg := &Config{}
+
+	viper.SetConfigFile(configFile)
+	viper.SetConfigType("yaml")
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		slog.Error("viper cant read in such config file ")
+
+		os.Exit(2)
+	}
+
+	err = viper.Unmarshal(cfg)
+	if err != nil {
+		slog.Error("failed to unmarshal config file", "error", err)
+
+		os.Exit(2)
+	}
+
+	slog.Info("init with storages", "storages", cfg.Storages)
+
+	provider := viper2.NewProvider(ctx, viper.Sub("storage"), viper2.ConfigTypeMoonlibs)
+
+	r, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		Loggerf:          vshardrouter.NewSlogLogger(logger),
+		TotalBucketCount: 100,
+		TopologyProvider: provider,
+	})
+	if err != nil {
+		slog.Error("failed to init router", "error", err)
+
+		os.Exit(2)
+	}
 
 	// Инициализация метрик
 
@@ -69,7 +109,7 @@ func main() {
 
 	metric.InitializeMetrics(server)
 
-	echoSrv, err := NewEchoService(ctx)
+	echoSrv, err := NewEchoService(ctx, r)
 	if err != nil {
 		slog.Error("can't create echo service", "error", err)
 
@@ -94,15 +134,7 @@ type EchoService struct {
 	echo.UnimplementedEchoServiceServer
 }
 
-func NewEchoService(ctx context.Context) (*EchoService, error) {
-	r, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
-		Loggerf:          vshardrouter.NewSlogLogger(logger),
-		TotalBucketCount: 100,
-	})
-	if err != nil {
-		return nil, err
-	}
-
+func NewEchoService(ctx context.Context, r *vshardrouter.Router) (*EchoService, error) {
 	return &EchoService{
 		router: r,
 	}, nil
