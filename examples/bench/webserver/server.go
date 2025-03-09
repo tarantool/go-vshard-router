@@ -14,18 +14,30 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 	"google.golang.org/grpc"
 )
 
 var (
 	// Create a metrics registry.
-	reg = prometheus.NewRegistry()
+	reg    = prometheus.NewRegistry()
+	logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 )
 
 func main() {
-
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	ctx := context.Background()
 	slog.SetDefault(logger)
+
+	// инциализация конфига
+
+	configFile := "config.yaml"
+
+	args := os.Args[1:]
+	if len(args) == 1 {
+		configFile = args[0]
+	}
+
+	slog.Info("reading config file", "from", configFile)
 
 	// Инициализация метрик
 
@@ -57,7 +69,14 @@ func main() {
 
 	metric.InitializeMetrics(server)
 
-	echo.RegisterEchoServiceServer(server, NewEchoService())
+	echoSrv, err := NewEchoService(ctx)
+	if err != nil {
+		slog.Error("can't create echo service", "error", err)
+
+		os.Exit(1)
+	}
+
+	echo.RegisterEchoServiceServer(server, echoSrv)
 
 	slog.Info("starting server at :8081")
 
@@ -70,11 +89,23 @@ func main() {
 }
 
 type EchoService struct {
+	router *vshardrouter.Router
+
 	echo.UnimplementedEchoServiceServer
 }
 
-func NewEchoService() *EchoService {
-	return &EchoService{}
+func NewEchoService(ctx context.Context) (*EchoService, error) {
+	r, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		Loggerf:          vshardrouter.NewSlogLogger(logger),
+		TotalBucketCount: 100,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &EchoService{
+		router: r,
+	}, nil
 }
 
 func (e *EchoService) Echo(ctx context.Context, req *echo.EchoRequest) (*echo.EchoResponse, error) {
