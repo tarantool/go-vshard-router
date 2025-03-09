@@ -193,6 +193,16 @@ func (ii InstanceInfo) Validate() error {
 // -- Configuration
 // --------------------------------------------------------------------------------
 
+// New initializes a new Router instance with the given configuration and context.
+// It prepares the configuration, initializes the topology provider, and performs an initial bucket discovery.
+func New(ctx context.Context, cfg Config) (*Router, error) {
+	return NewRouter(ctx, cfg)
+}
+
+// NewRouter initializes a new Router instance with the given configuration and context.
+// It prepares the configuration, initializes the topology provider, and performs an initial bucket discovery.
+//
+// Deprecated: Use New function instead.
 func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	var err error
 

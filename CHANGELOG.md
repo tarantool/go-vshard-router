@@ -2,6 +2,7 @@
 
 CHANGES:
 
+* NewRouter function is deprecated. Use New instead.
 * Bucket mapping code is simplified: (removed consistentView type, removed knownBucketCount field).
 * Remove 'exportloopref' linter because it is no longer relevant.
 
