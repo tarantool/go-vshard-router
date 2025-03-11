@@ -82,7 +82,7 @@ func main() {
 	// Инициализация метрик
 
 	// Настройка прослушивания порта
-	lis, err := net.Listen("tcp", ":8081")
+	lis, err := net.Listen("tcp", ":8082")
 	if err != nil {
 		slog.Error("can't listen port", "error", err)
 		os.Exit(1)
@@ -152,7 +152,7 @@ func (e *EchoService) Echo(ctx context.Context, req *echo.EchoRequest) (*echo.Ec
 		bucketID,
 		vshardrouter.CallModeBRO,
 		"echo",
-		msg,
+		[]interface{}{msg},
 		vshardrouter.CallOpts{
 			Timeout: time.Second,
 		},
@@ -161,10 +161,15 @@ func (e *EchoService) Echo(ctx context.Context, req *echo.EchoRequest) (*echo.Ec
 		return nil, err
 	}
 
-	fmt.Println(resp)
+	str := new(string)
+
+	err = resp.GetTyped(&[]interface{}{str})
+	if err != nil {
+		return nil, err
+	}
 
 	defer fmt.Println(time.Since(t))
 	return &echo.EchoResponse{
-		Message: msg,
+		Message: *str,
 	}, nil
 }
