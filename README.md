@@ -7,7 +7,6 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/tarantool/go-vshard-router)](https://goreportcard.com/report/github.com/tarantool/go-vshard-router)
 [![Code Coverage][coverage-badge]][coverage-url]
 [![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/KaymeKaydex/go-vshard-router/master/LICENSE)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/tarantool/go-vshard-router/badge)](https://scorecard.dev/viewer/?uri=github.com/tarantool/go-vshard-router)
 
 Translations:
 - [Русский](https://github.com/tarantool/go-vshard-router/blob/master/README_ru.md)
