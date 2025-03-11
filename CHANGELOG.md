@@ -5,6 +5,10 @@ CHANGES:
 * Bucket mapping code is simplified: (removed consistentView type, removed knownBucketCount field).
 * Remove 'exportloopref' linter because it is no longer relevant.
 
+BUG FIXES:
+
+* Previously the name was not filled for the viper provider for the moonlibs type config. This resulted in incorrect router initialization.
+
 ## v2.0.3
 
 FEATURES:
