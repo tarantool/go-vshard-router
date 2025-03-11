@@ -28,7 +28,7 @@ func (cfg *Config) Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.Ins
 
 		rsInstances := make([]vshardrouter.InstanceInfo, 0)
 
-		for _, instInfo := range cfg.Topology.Instances {
+		for instName, instInfo := range cfg.Topology.Instances {
 			if instInfo.Cluster != rsName {
 				continue
 			}
@@ -41,6 +41,7 @@ func (cfg *Config) Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.Ins
 			}
 
 			rsInstances = append(rsInstances, vshardrouter.InstanceInfo{
+				Name: instName,
 				Addr: instInfo.Box.Listen,
 				UUID: instUUID,
 			})
