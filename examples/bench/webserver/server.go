@@ -82,7 +82,7 @@ func main() {
 	// Инициализация метрик
 
 	// Настройка прослушивания порта
-	lis, err := net.Listen("tcp", ":8082")
+	lis, err := net.Listen("tcp", ":8081")
 	if err != nil {
 		slog.Error("can't listen port", "error", err)
 		os.Exit(1)
