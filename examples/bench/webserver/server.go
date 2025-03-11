@@ -68,10 +68,13 @@ func main() {
 
 	provider := viper2.NewProvider(ctx, viper.Sub("storage"), viper2.ConfigTypeMoonlibs)
 
+	vshardCollector := vshardrouter.NewPrometheusProvider()
+
 	r, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
 		Loggerf:          vshardrouter.NewSlogLogger(logger),
 		TotalBucketCount: 100,
 		TopologyProvider: provider,
+		Metrics:          vshardCollector,
 	})
 	if err != nil {
 		slog.Error("failed to init router", "error", err)
@@ -82,7 +85,7 @@ func main() {
 	// Инициализация метрик
 
 	// Настройка прослушивания порта
-	lis, err := net.Listen("tcp", ":8081")
+	lis, err := net.Listen("tcp", ":8082")
 	if err != nil {
 		slog.Error("can't listen port", "error", err)
 		os.Exit(1)
@@ -91,12 +94,13 @@ func main() {
 	metric := prom.NewServerMetrics(prom.WithServerHandlingTimeHistogram(prom.WithHistogramBuckets(
 		[]float64{0.00001, 0.00005, 0.0001, 0.0002, 0.0003, 0.0005, 0.0008, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 2.5, 3, 4, 5, 7, 8, 10, 15})),
 	)
-	reg.MustRegister(metric, collectors.NewGoCollector())
+
+	reg.MustRegister(metric, collectors.NewGoCollector(), vshardCollector)
 
 	// Запуск HTTP-сервера для метрик
 	go func() {
 		slog.Info("Metrics serving")
-		httpServer := &http.Server{Handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}), Addr: fmt.Sprintf("0.0.0.0:%d", 8080)}
+		httpServer := &http.Server{Handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}), Addr: fmt.Sprintf("0.0.0.0:%d", 8083)}
 		if err := httpServer.ListenAndServe(); err != nil {
 			slog.Error("Unable to start a http server.")
 		}
