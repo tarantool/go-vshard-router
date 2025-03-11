@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v2.0.4
+
 CHANGES:
 
 * Bucket mapping code is simplified: (removed consistentView type, removed knownBucketCount field).
