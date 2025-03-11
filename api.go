@@ -264,7 +264,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	for {
 		if spent := time.Since(requestStartTime); spent > timeout {
-			r.metrics().RequestDuration(spent, false, false)
+			r.metrics().RequestDuration(spent, fnc, false, false)
 
 			r.log().Debugf(ctx, "Return result on timeout; spent %s of timeout %s", spent, timeout)
 			if err == nil {
@@ -291,7 +291,8 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 		r.log().Infof(ctx, "Try call %s on replicaset %s for bucket %d", fnc, rs.info.Name, bucketID)
 
-		var storageCallResponse vshardStorageCallResponseProto
+		storageCallResponse := vshardStorageCallResponseProto{}
+
 		err = rs.conn.Do(tntReq, poolMode).GetTyped(&storageCallResponse)
 		if err != nil {
 			return VshardRouterCallResp{}, fmt.Errorf("got error on future.GetTyped(): %w", err)
@@ -386,7 +387,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			}
 		}
 
-		r.metrics().RequestDuration(time.Since(requestStartTime), true, false)
+		r.metrics().RequestDuration(time.Since(requestStartTime), fnc, true, false)
 
 		return storageCallResponse.CallResp, nil
 	}
@@ -646,7 +647,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	// map stage: get their responses
 	nameToResult := make(map[string]T)
 	for _, rsFuture := range rsFutures {
-		var storageMapResponse storageMapResponseProto[T]
+		storageMapResponse := storageMapResponseProto[T]{}
 
 		err := rsFuture.future.GetTyped(&storageMapResponse)
 		if err != nil {
@@ -660,7 +661,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		nameToResult[rsFuture.name] = storageMapResponse.value
 	}
 
-	r.metrics().RequestDuration(time.Since(timeStart), true, true)
+	r.metrics().RequestDuration(time.Since(timeStart), fnc, true, true)
 
 	return nameToResult, nil
 }
