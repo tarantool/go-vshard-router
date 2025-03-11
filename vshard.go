@@ -193,6 +193,9 @@ func (ii InstanceInfo) Validate() error {
 // -- Configuration
 // --------------------------------------------------------------------------------
 
+// NewRouter - the main library function.
+// It creates a Router for direct request routing in a sharded Tarantool cluster.
+// It connects to masters and replicas for load distribution and fault tolerance.
 func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	var err error
 
