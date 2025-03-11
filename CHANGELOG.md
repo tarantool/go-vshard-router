@@ -1,5 +1,17 @@
 ## Unreleased
 
+The go-vshard team apologizes for changing the interfaces to experimental status.
+This is due to an inherently bad approach to controversial interfaces.
+
+CHANGES:
+* The MetricsProvider interface has been made experimental. This means that during the release we may change its implementation. If you do not want to lose backward compatibility, use empty or the standard prometheus implementation.
+* MetricsProvider now supports DecodeDuration metric.
+
+FEATURES:
+
+* Implemented experimental DefaultPrometheusProvider that can be usefully for default prometheus metrics.
+* RequestDuration metric interface requires procedure name.
+
 ## v2.0.4
 
 CHANGES:
