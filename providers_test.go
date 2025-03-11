@@ -25,7 +25,7 @@ func TestEmptyMetrics_RetryOnCall(t *testing.T) {
 
 func TestEmptyMetrics_RequestDuration(t *testing.T) {
 	require.NotPanics(t, func() {
-		emptyMetrics.RequestDuration(time.Second, false, false)
+		emptyMetrics.RequestDuration(time.Second, "test", false, false)
 	})
 }
 

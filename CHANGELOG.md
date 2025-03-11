@@ -1,17 +1,23 @@
 ## Unreleased
 
+The go-vshard team apologizes for changing the interfaces to experimental status.
+This is due to an inherently bad approach to controversial interfaces.
+
 BUG FIXES:
 * Router.Call bugfix: set destinationName := rs.info.Name if destination exists.
 * Router.Route bugfix: handle outdated *Replicaset object (resolve issue #11).
 
 FEATURES:
 * Now when calling RemoveInstance, if an empty replicaset name is passed, the replicaset will be calculated automatically.
+* Implemented PrometheusProvider that can be usefully for default prometheus metrics.
 
 CHANGES:
 * Bump go-tarantool from v2.2.1 to v2.3.0.
 * Make comments more go-style.
 * Router.cronDiscovery: log panic in another goroutine.
 * Tiny optimization in SlogLoggerf.
+* The MetricsProvider interface has been made experimental. This means that during the release we may change its implementation. If you do not want to lose backward compatibility, use empty or the standard prometheus implementation.
+* RequestDuration metric interface requires procedure name.
 
 TESTS:
 * Fixed etcd overlapping ports.

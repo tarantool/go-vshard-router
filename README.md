@@ -172,6 +172,14 @@ func main() {
 }
 ```
 ### Providers
+<img align="center"  src="docs/static/providers.png" alt="topology">
+
+We understand that the implementations of loggers, metrics,
+and topology sources can vary significantly in both implementation and usage.
+Therefore, go-vshard-router gives you the flexibility to choose the tools you deem appropriate
+or implement them yourself by using interfaces.
+
+#### Topology
 You can use topology (configuration) providers as the source of router configuration.  
 Currently, the following providers are supported:
 
@@ -181,6 +189,13 @@ Currently, the following providers are supported:
   - etcd v3
   - consul
   - files
+
+#### Metrics
+Metrics providers are also available,
+you can use ready-made metrics providers that can be registered in prometheus and passed to go-vshard-router.
+This will allow you not to think about options and metrics settings.
+The following providers are currently available:
+- [prometheus](providers/prometheus)
 
 ### Learn more examples
 #### Quick Start
