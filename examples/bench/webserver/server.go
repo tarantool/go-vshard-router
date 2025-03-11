@@ -145,6 +145,24 @@ func (e *EchoService) Echo(ctx context.Context, req *echo.EchoRequest) (*echo.Ec
 	msg := req.GetMessage()
 	slog.Info(msg)
 
+	bucketID := vshardrouter.BucketIDStrCRC32(req.Message, 100)
+
+	resp, err := e.router.Call(
+		ctx,
+		bucketID,
+		vshardrouter.CallModeBRO,
+		"echo",
+		msg,
+		vshardrouter.CallOpts{
+			Timeout: time.Second,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println(resp)
+
 	defer fmt.Println(time.Since(t))
 	return &echo.EchoResponse{
 		Message: msg,

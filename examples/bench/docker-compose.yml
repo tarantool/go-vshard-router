@@ -7,6 +7,11 @@ services:
       - "8081:8081"
     volumes:
       - ./config.yaml:/etc/webserver/config.yaml
+    depends_on:
+      - tarantool-storage-1-a
+      - tarantool-storage-1-b
+      - tarantool-storage-2-a
+      - tarantool-storage-2-b
   prometheus:
     image: prom/prometheus:v2.53.3
     ports:
