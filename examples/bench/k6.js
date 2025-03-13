@@ -5,7 +5,7 @@ const client = new grpc.Client()
 client.load(['webserver'], 'echo.proto')
 
 export default function () {
-    client.connect('0.0.0.0:8082', { plaintext: true })
+    client.connect('0.0.0.0:8081', { plaintext: true })
 
     const data = { message: 'Hello'}
     console.log("invoke request")
