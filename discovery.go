@@ -55,7 +55,20 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 
 	rs := routeMap[bucketID].Load()
 	if rs != nil {
-		return rs, nil
+		nameToReplicasetRef := r.getNameToReplicaset()
+
+		actualRs := nameToReplicasetRef[rs.info.Name]
+		switch {
+		case actualRs == nil:
+			// rs is outdated, can't use it -- let's discover bucket again
+			r.BucketReset(bucketID)
+		case actualRs == rs:
+			return rs, nil
+		default: // actualRs != rs
+			// update rs -> actualRs for this bucket
+			_, _ = r.BucketSet(bucketID, actualRs.info.Name)
+			return actualRs, nil
+		}
 	}
 
 	// it`s ok if in the same time we have few active searches
@@ -106,14 +119,9 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 		return rs, nil
 	}
 
-	/*
-	   -- All replicasets were scanned, but a bucket was not
-	   -- found anywhere, so most likely it does not exist. It
-	   -- can be wrong, if rebalancing is in progress, and a
-	   -- bucket was found to be RECEIVING on one replicaset, and
-	   -- was not found on other replicasets (it was sent during
-	   -- discovery).
-	*/
+	// All replicasets were scanned, but a bucket was not found anywhere, so most likely it does not exist.
+	// It can be wrong, if rebalancing is in progress, and a bucket was found to be RECEIVING on one replicaset,
+	// and was not found on other replicasets (it was sent during discovery).
 
 	return nil, newVShardErrorNoRouteToBucket(bucketID)
 }
@@ -191,6 +199,8 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 		if oldRs == rs {
 			continue
 		}
+
+		// NOTE: oldRs and rs might have the same name, we intentionally don't check this case to keep the logic simple
 
 		// We don't check oldRs for nil here, because it's a valid key too (if rs == nil, it means removed from unknown buckets set)
 		removedFrom[oldRs]++
@@ -294,9 +304,15 @@ func (r *Router) cronDiscovery(ctx context.Context) {
 					// Another one panic may happen due to log function below (e.g. bug in log().Errorf), in this case we have two options:
 					// 1. recover again and log nothing: panic will be muted and lost
 					// 2. don't try to recover, we hope that the second panic will be logged somehow by go runtime
-					// So, we choose the second behavior
-					r.log().Errorf(ctx, "[DISCOVERY] something unexpected has happened in cronDiscovery(%d): panic %v, stackstrace: %s",
-						iterationCount, recovered, string(debug.Stack()))
+					// So, we desided to combine them in the third behavior: log in another goroutin
+					iterationCount := iterationCount
+					// get stacktrace in the current goroutine
+					debugStack := string(debug.Stack())
+
+					go func() {
+						r.log().Errorf(ctx, "[DISCOVERY] something unexpected has happened in cronDiscovery(%d): panic %v, stacktrace: %s",
+							iterationCount, recovered, debugStack)
+					}()
 				}
 			}()
 

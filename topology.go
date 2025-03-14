@@ -25,6 +25,14 @@ type TopologyController interface {
 	AddReplicasets(ctx context.Context, replicasets map[ReplicasetInfo][]InstanceInfo) error
 }
 
+func copyMap[K comparable, V any](m map[K]V) map[K]V {
+	copy := make(map[K]V)
+	for k, v := range m {
+		copy[k] = v
+	}
+	return copy
+}
+
 func (r *Router) getNameToReplicaset() map[string]*Replicaset {
 	r.nameToReplicasetMutex.RLock()
 	nameToReplicasetRef := r.nameToReplicaset
@@ -119,10 +127,6 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 		return ErrReplicasetExists
 	}
 
-	replicaset := &Replicaset{
-		info: rsInfo,
-	}
-
 	rsInstances := make([]pool.Instance, 0, len(instances))
 	for _, instance := range instances {
 		rsInstances = append(rsInstances, pool.Instance{
@@ -158,13 +162,13 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 		r.log().Errorf(ctx, "got connected now as false to pool.RW")
 	}
 
-	replicaset.conn = conn
+	replicaset := &Replicaset{
+		info: rsInfo,
+		conn: conn,
+	}
 
 	// Create an entirely new map object
-	nameToReplicasetNew := make(map[string]*Replicaset)
-	for k, v := range nameToReplicasetOld {
-		nameToReplicasetNew[k] = v
-	}
+	nameToReplicasetNew := copyMap(nameToReplicasetOld)
 	nameToReplicasetNew[rsInfo.Name] = replicaset // add when conn is ready
 
 	// We could detect concurrent access to the TopologyController interface
@@ -202,10 +206,7 @@ func (r *Router) RemoveReplicaset(ctx context.Context, rsName string) []error {
 	}
 
 	// Create an entirely new map object
-	nameToReplicasetNew := make(map[string]*Replicaset)
-	for k, v := range nameToReplicasetOld {
-		nameToReplicasetNew[k] = v
-	}
+	nameToReplicasetNew := copyMap(nameToReplicasetOld)
 	delete(nameToReplicasetNew, rsName)
 
 	r.setNameToReplicaset(nameToReplicasetNew)
