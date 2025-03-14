@@ -42,9 +42,8 @@ type Router struct {
 
 	routeMap atomic.Pointer[routeMap]
 
-	// ----------------------- Map-Reduce -----------------------
-	// Storage Ref ID. It must be unique for each ref request
-	// and therefore is global and monotonically growing.
+	// refID is used for Map-Reduce operation. Since it must be unique (within connection) for each ref request,
+	// we made it global and monotonically growing for each Router instance.
 	refID atomic.Int64
 
 	cancelDiscovery func()

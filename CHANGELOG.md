@@ -1,10 +1,16 @@
 ## Unreleased
 
+BUG FIXES:
+* Router.Call bugfix: set destinationName := rs.info.Name if destination exists.
+* Router.Route bugfix: handle outdated *Replicaset object (resolve issue #11).
+
 FEATURES:
 * Now when calling RemoveInstance, if an empty replicaset name is passed, the replicaset will be calculated automatically.
 
 CHANGES:
 * Bump go-tarantool from v2.2.1 to v2.3.0.
+* Make comments more go-style.
+* Router.cronDiscovery: log panic in another goroutine.
 
 TESTS:
 * Fixed etcd overlapping ports.

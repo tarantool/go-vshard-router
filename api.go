@@ -311,35 +311,43 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L663
 				r.BucketReset(bucketID)
 
-				if destination := vshardError.Destination; destination != "" {
+				destination := vshardError.Destination
+				if destination != "" {
 					var loggedOnce bool
 					for {
 						nameToReplicasetRef := r.getNameToReplicaset()
 
-						_, destinationExists := nameToReplicasetRef[destination]
+						// In some cases destination contains UUID (prior to tnt 3.x), in some cases it contains replicaset name.
+						// So, at this point we don't know what destination is: a name or an UUID.
+						// But we need a name to access values in nameToReplicasetRef map, so let's find it out.
+						var destinationName string
 
-						if !destinationExists {
+						_, destinationExists := nameToReplicasetRef[destination]
+						if destinationExists {
+							destinationName = destination
+						} else {
 							// for older logic with uuid we must support backward compatibility
 							// if destination is uuid and not name, lets find it too
-							for _, rsRef := range nameToReplicasetRef {
-								if rsRef.info.UUID.String() == destination {
+							for rsName, rs := range nameToReplicasetRef {
+								if rs.info.UUID.String() == destination {
 									destinationExists = true
+									destinationName = rsName
 									break
 								}
 							}
 						}
 
 						if destinationExists {
-							_, err := r.BucketSet(bucketID, destination)
+							_, err := r.BucketSet(bucketID, destinationName)
 							if err == nil {
 								break // breaks loop
 							}
-							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destination, err)
+							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destinationName, err)
 						}
 
 						if !loggedOnce {
 							r.log().Warnf(ctx, "Replicaset '%v' was not found, but received from storage as destination - please "+
-								"update configuration", destination)
+								"update configuration", destinationName)
 							loggedOnce = true
 						}
 
@@ -662,11 +670,5 @@ func (r *Router) RouteAll() map[string]*Replicaset {
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	// Do not expose the original map to prevent unauthorized modification.
-	nameToReplicasetCopy := make(map[string]*Replicaset)
-
-	for k, v := range nameToReplicasetRef {
-		nameToReplicasetCopy[k] = v
-	}
-
-	return nameToReplicasetCopy
+	return copyMap(nameToReplicasetRef)
 }
