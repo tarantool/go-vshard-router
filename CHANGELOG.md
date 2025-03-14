@@ -1,5 +1,14 @@
 ## Unreleased
 
+BUG FIXES:
+
+* Router.Call bugfix: set destinationName := rs.info.Name if destination exists.
+* Router.Route bugfix: handle outdated *Replicaset object (resolve issue #11).
+
+CHANGES:
+* Make comments more go-style.
+* Router.cronDiscovery: log panic in another goroutine.
+
 ## v2.0.4
 
 CHANGES:
