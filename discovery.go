@@ -277,7 +277,7 @@ func (r *Router) cronDiscovery(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			r.metrics().CronDiscoveryEvent(false, 0, "ctx-cancel")
+			metrics.CronDiscoveryEvent(false, 0, "ctx-cancel")
 			r.log().Infof(ctx, "[DISCOVERY] cron discovery has been stopped after %d iterations", iterationCount)
 			return
 		case <-time.After(r.cfg.DiscoveryTimeout):
@@ -305,14 +305,14 @@ func (r *Router) cronDiscovery(ctx context.Context) {
 			tStartDiscovery := time.Now()
 
 			if err := r.DiscoveryAllBuckets(ctx); err != nil {
-				r.metrics().CronDiscoveryEvent(false, time.Since(tStartDiscovery), "discovery-error")
+				metrics.CronDiscoveryEvent(false, time.Since(tStartDiscovery), "discovery-error")
 				r.log().Errorf(ctx, "[DISCOVERY] cant do cron discovery iteration %d with error: %s", iterationCount, err)
 				return
 			}
 
 			r.log().Infof(ctx, "[DISCOVERY] finished cron discovery iteration %d", iterationCount)
 
-			r.metrics().CronDiscoveryEvent(true, time.Since(tStartDiscovery), "ok")
+			metrics.CronDiscoveryEvent(true, time.Since(tStartDiscovery), "ok")
 		}()
 	}
 }

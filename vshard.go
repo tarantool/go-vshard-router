@@ -25,6 +25,8 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
+var metrics MetricsProvider
+
 type routeMap = []atomic.Pointer[Replicaset]
 
 type Router struct {
@@ -48,10 +50,6 @@ type Router struct {
 	refID atomic.Int64
 
 	cancelDiscovery func()
-}
-
-func (r *Router) metrics() MetricsProvider {
-	return r.cfg.Metrics
 }
 
 func (r *Router) log() LogfProvider {
@@ -292,8 +290,10 @@ func prepareCfg(ctx context.Context, cfg Config) (Config, error) {
 		ctx:     ctx,
 	}
 
-	if cfg.Metrics == nil {
-		cfg.Metrics = emptyMetricsProvider
+	metrics = cfg.Metrics
+
+	if metrics == nil {
+		metrics = emptyMetricsProvider
 	}
 
 	if cfg.DiscoveryWorkStep == 0 {
