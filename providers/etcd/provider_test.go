@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
@@ -75,6 +76,7 @@ func TestNewProvider(t *testing.T) {
 func TestProvider_GetTopology(t *testing.T) {
 	ctx := context.Background()
 
+	time.Sleep(time.Second)
 	clientConfig := client.Config{Endpoints: []string{"http://127.0.0.1:2379"}}
 
 	c, err := client.New(clientConfig)
@@ -149,31 +151,24 @@ func TestProvider_GetTopology(t *testing.T) {
 		*/
 
 		dbName := "userdb"
-		_, _ = kapi.Set(ctx, dbName, "", &client.SetOptions{Dir: true})
+		_, err = kapi.Set(ctx, dbName, "", &client.SetOptions{Dir: true})
 
 		p, err := NewProvider(ctx, Config{EtcdConfig: clientConfig, Path: dbName})
 		require.NoError(t, err)
 
 		// set root paths
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s", dbName, "clusters"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s", dbName, "instances"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
 		// set cluster
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s", dbName, "clusters", "userdb"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
 
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s", dbName, "instances", "userdb_001"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
 
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s", dbName, "instances", "userdb_001", "cluster"), "userdb", &client.SetOptions{Dir: false})
-		require.NoError(t, err)
 
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s", dbName, "instances", "userdb_001", "box"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
 
 		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s/%s", dbName, "instances", "userdb_001", "box", "listen"), "10.0.1.13:3303", &client.SetOptions{Dir: false})
-		require.NoError(t, err)
 
 		topology, err := p.GetTopology()
 		require.NoError(t, err)
