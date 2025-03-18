@@ -2,7 +2,6 @@ package vshard_router // nolint: revive
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -182,7 +181,7 @@ func TestVshardStorageCallResponseProto_DecodeMsgpack_GetNonTyped(t *testing.T) 
 			err := msgpack.NewEncoder(buf).Encode(val)
 			require.NoError(t, err)
 
-			return buf, val
+			return buf, []interface{}{val}
 		},
 	}
 
@@ -192,7 +191,7 @@ func TestVshardStorageCallResponseProto_DecodeMsgpack_GetNonTyped(t *testing.T) 
 
 			protoResp := vshardStorageCallResponseProto{}
 
-			buf, _ := bufGenerator()
+			buf, respExpect := bufGenerator()
 
 			err := protoResp.DecodeMsgpack(msgpack.NewDecoder(buf))
 			require.NoError(t, err)
@@ -201,48 +200,64 @@ func TestVshardStorageCallResponseProto_DecodeMsgpack_GetNonTyped(t *testing.T) 
 			require.Nil(t, protoResp.VshardError)
 			require.NotNil(t, protoResp.CallResp.buf)
 
-			var result []interface{}
-
-			err = msgpack.Unmarshal(protoResp.CallResp.buf.Bytes(), &result)
+			resp, err := protoResp.CallResp.Get()
 			require.NoError(t, err)
 
-			fmt.Println(result)
+			require.Equal(t, respExpect, resp)
 		})
 
 	}
 }
 
 func BenchmarkVshardStorageCallResponseProto_DecodeMsgpack_Ok(b *testing.B) {
-	prepareBuf := func() *bytes.Buffer {
-		buf := bytes.NewBuffer(nil)
-		buf.WriteByte(msgpcode.FixedArrayLow | byte(2))
-		buf.WriteByte(msgpcode.True)
+	// Skip in timer buffer creation information
+	b.StopTimer()
 
-		return buf
+	// We need a lot of different examples to avoid caching the data in CPU caches.
+	const examplesCount = 100_000
+	var bufBytesArr [][]byte
+
+	for i := 0; i < examplesCount; i++ {
+		buf := bytes.NewBuffer(nil)
+
+		err := msgpack.NewEncoder(buf).Encode([]interface{}{true, i})
+		require.NoError(b, err)
+
+		bufBytesArr = append(bufBytesArr, buf.Bytes())
 	}
+
+	// allocate a bytesReader and msgpackDecoder only once to eliminate memory allocation intervention to benchmark
+	bytesReader := bytes.NewReader(nil)
+	msgpackDecoder := msgpack.NewDecoder(nil)
+
+	// detects errors as count to minimize `require` module intervention to benchmark
+	var errCount uint64
+	var err error
+
+	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		// Skip buffer creation information
-		b.StopTimer()
+		// benchmark will include some redundant things such Reset call below, it is ok for us now.
+		// NOTE: get a new bufBytes each time to flush out CPU caches
+		bytesReader.Reset(bufBytesArr[i%examplesCount])
+		msgpackDecoder.Reset(bytesReader)
 
-		buf := prepareBuf()
-		val := []interface{}{i}
-
-		err := msgpack.NewEncoder(buf).Encode(val)
-		require.NoError(b, err)
-
-		b.StartTimer()
-
+		// benchmark core parts are below
+		// - protoResp.DecodeMsgpack
+		// - protoResp.CallResp.Get()
 		protoResp := vshardStorageCallResponseProto{}
+		err = protoResp.DecodeMsgpack(msgpackDecoder)
+		if err != nil {
+			errCount++
+		}
 
-		err = protoResp.DecodeMsgpack(msgpack.NewDecoder(buf))
-		require.NoError(b, err)
-
-		resp := VshardRouterCallResp{buf: protoResp.CallResp.buf}
-
-		_, err = resp.Get()
-		require.NoError(b, err)
+		_, err = protoResp.CallResp.Get()
+		if err != nil {
+			errCount++
+		}
 	}
+	b.StopTimer()
 
+	require.True(b, errCount == 0)
 	b.ReportAllocs()
 }
