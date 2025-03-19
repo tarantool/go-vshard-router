@@ -311,35 +311,36 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L663
 				r.BucketReset(bucketID)
 
-				if destination := vshardError.Destination; destination != "" {
+				if destinationName := vshardError.Destination; destinationName != "" {
 					var loggedOnce bool
 					for {
 						nameToReplicasetRef := r.getNameToReplicaset()
 
-						_, destinationExists := nameToReplicasetRef[destination]
+						_, destinationExists := nameToReplicasetRef[destinationName]
 
 						if !destinationExists {
 							// for older logic with uuid we must support backward compatibility
 							// if destination is uuid and not name, lets find it too
-							for _, rsRef := range nameToReplicasetRef {
-								if rsRef.info.UUID.String() == destination {
+							for _, rs := range nameToReplicasetRef {
+								if rs.info.UUID.String() == destinationName {
 									destinationExists = true
+									destinationName = rs.info.Name
 									break
 								}
 							}
 						}
 
 						if destinationExists {
-							_, err := r.BucketSet(bucketID, destination)
+							_, err := r.BucketSet(bucketID, destinationName)
 							if err == nil {
 								break // breaks loop
 							}
-							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destination, err)
+							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destinationName, err)
 						}
 
 						if !loggedOnce {
 							r.log().Warnf(ctx, "Replicaset '%v' was not found, but received from storage as destination - please "+
-								"update configuration", destination)
+								"update configuration", destinationName)
 							loggedOnce = true
 						}
 
@@ -662,11 +663,5 @@ func (r *Router) RouteAll() map[string]*Replicaset {
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	// Do not expose the original map to prevent unauthorized modification.
-	nameToReplicasetCopy := make(map[string]*Replicaset)
-
-	for k, v := range nameToReplicasetRef {
-		nameToReplicasetCopy[k] = v
-	}
-
-	return nameToReplicasetCopy
+	return copyMap(nameToReplicasetRef)
 }
