@@ -49,8 +49,19 @@ type ReplicasetCallOpts struct {
 	Timeout  time.Duration
 }
 
+// Pooler is an interface for the tarantool.Pool wrapper,
+// which is necessary for the correct operation of the library.
+type Pooler interface {
+	pool.Pooler
+	// GetInfo is an addition to the standard interface that allows you
+	// to get the current state of the connection pool.
+	// This is necessary for proper operation with topology providers
+	// for adding or removing instances.
+	GetInfo() map[string]pool.ConnectionInfo
+}
+
 type Replicaset struct {
-	conn              pool.Pooler
+	conn              Pooler
 	info              ReplicasetInfo
 	EtalonBucketCount uint64
 }

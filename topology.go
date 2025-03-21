@@ -71,12 +71,33 @@ func (r *Router) AddInstance(ctx context.Context, rsName string, info InstanceIn
 	return rs.conn.Add(ctx, instance)
 }
 
+// RemoveInstance removes a specific instance from the router topology within a replicaset.
+// It takes a context, the replicaset name (rsName), and the instance name (instanceName) as inputs.
+// If the replicaset name is empty, it searches through all replica sets to locate the instance.
+// Returns an error if the specified replicaset does not exist or if any issue occurs during removal.
 func (r *Router) RemoveInstance(ctx context.Context, rsName, instanceName string) error {
 	r.log().Debugf(ctx, "Trying to remove instance %s from router topology in rs %s", instanceName, rsName)
 
 	nameToReplicasetRef := r.getNameToReplicaset()
 
-	rs := nameToReplicasetRef[rsName]
+	var rs *Replicaset
+
+	if rsName == "" {
+		r.log().Debugf(ctx, "Replicaset name is not provided for instance %s, attempting to find it",
+			instanceName)
+
+		for _, trs := range nameToReplicasetRef {
+			_, exists := trs.conn.GetInfo()[instanceName]
+			if exists {
+				r.log().Debugf(ctx, "Replicaset found for instance %s, removing it", instanceName)
+
+				rs = trs
+			}
+		}
+	} else {
+		rs = nameToReplicasetRef[rsName]
+	}
+
 	if rs == nil {
 		return ErrReplicasetNotExists
 	}
