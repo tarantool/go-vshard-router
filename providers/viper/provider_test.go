@@ -100,11 +100,11 @@ func TestNewProvider_ETCD3(t *testing.T) {
 	config.Name = "localhost"
 	config.Dir = "/tmp/my-embedded-ectd-cluster"
 
-	config.ListenPeerUrls = parseEtcdUrls([]string{"http://0.0.0.0:2380"})
-	config.ListenClientUrls = parseEtcdUrls([]string{"http://0.0.0.0:2379"})
-	config.AdvertisePeerUrls = parseEtcdUrls([]string{"http://localhost:2380"})
-	config.AdvertiseClientUrls = parseEtcdUrls([]string{"http://localhost:2379"})
-	config.InitialCluster = "localhost=http://localhost:2380"
+	config.ListenPeerUrls = parseEtcdUrls([]string{"http://0.0.0.0:2480"})
+	config.ListenClientUrls = parseEtcdUrls([]string{"http://0.0.0.0:2479"})
+	config.AdvertisePeerUrls = parseEtcdUrls([]string{"http://localhost:2480"})
+	config.AdvertiseClientUrls = parseEtcdUrls([]string{"http://localhost:2479"})
+	config.InitialCluster = "localhost=http://localhost:2480"
 	config.LogLevel = "panic"
 
 	etcd, err := embed.StartEtcd(config)
@@ -113,7 +113,7 @@ func TestNewProvider_ETCD3(t *testing.T) {
 	defer etcd.Close()
 
 	client, err := clientv3.New(clientv3.Config{
-		Endpoints: []string{"localhost:2379"},
+		Endpoints: []string{"localhost:2479"},
 	})
 	require.NoError(t, err)
 
@@ -134,7 +134,7 @@ func TestNewProvider_ETCD3(t *testing.T) {
 
 	t.Run("ok reads config", func(t *testing.T) {
 		etcdViper := viper.New()
-		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", key)
+		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2479", key)
 		require.NoError(t, err)
 
 		etcdViper.SetConfigType("yaml")
@@ -148,7 +148,7 @@ func TestNewProvider_ETCD3(t *testing.T) {
 	t.Run("invalid path", func(t *testing.T) {
 		etcdViper := viper.New()
 
-		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", "/some-invalid-path")
+		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2479", "/some-invalid-path")
 		require.NoError(t, err)
 
 		etcdViper.SetConfigType("yaml")
@@ -165,7 +165,7 @@ func TestNewProvider_ETCD3(t *testing.T) {
 		_, err := kv.Put(ctx, emptyPath, "")
 		require.NoError(t, err)
 
-		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2379", "/some-empty-path")
+		err = etcdViper.AddRemoteProvider("etcd3", "http://127.0.0.1:2479", "/some-empty-path")
 		require.NoError(t, err)
 
 		etcdViper.SetConfigType("yaml")

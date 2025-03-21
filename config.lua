@@ -46,7 +46,6 @@ local cfg = {
           }, -- replicaset #2
      }, -- sharding
      replication_connect_quorum = 0, -- its oke if we havent some replicas
-     work_dir = NAME,
 }
 
 

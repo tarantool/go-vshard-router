@@ -8,9 +8,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func StartTarantoolInstances(instsOpts []ttnt.StartOpts) ([]ttnt.TarantoolInstance, error) {
+func StartTarantoolInstances(instsOpts []ttnt.StartOpts) ([]*ttnt.TarantoolInstance, error) {
 	ctx := context.Background()
-	instances := make([]ttnt.TarantoolInstance, len(instsOpts))
+	instances := make([]*ttnt.TarantoolInstance, len(instsOpts))
 	errGr, _ := errgroup.WithContext(ctx)
 
 	for i, opts := range instsOpts {
