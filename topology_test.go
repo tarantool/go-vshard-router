@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/tarantool/go-tarantool/v2/pool"
 	mockpool "github.com/tarantool/go-vshard-router/v2/mocks/pool"
 )
 
@@ -47,27 +49,60 @@ func TestController_AddInstance(t *testing.T) {
 	})
 }
 
-func TestController_RemoveInstance(t *testing.T) {
+func TestController_RemoveInstance_NoSuchReplicaset(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("no such replicaset", func(t *testing.T) {
-		router := Router{
-			nameToReplicaset: map[string]*Replicaset{},
-			cfg: Config{
-				Loggerf: emptyLogfProvider,
-			},
-		}
+	router := Router{
+		nameToReplicaset: map[string]*Replicaset{},
+		cfg: Config{
+			Loggerf: emptyLogfProvider,
+		},
+	}
 
-		err := router.Topology().RemoveInstance(ctx, uuid.New().String(), "")
-		require.True(t, errors.Is(err, ErrReplicasetNotExists))
+	err := router.Topology().RemoveInstance(ctx, uuid.New().String(), "")
+	require.True(t, errors.Is(err, ErrReplicasetNotExists))
+
+}
+
+func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	instanceName := "instance_001"
+
+	mp := mockpool.NewPooler(t)
+	mp.On("GetInfo").Return(map[string]pool.ConnectionInfo{
+		instanceName: {
+			ConnectedNow: true,
+		},
 	})
+
+	mp.On("Remove", mock.Anything).Return(nil)
+
+	router := Router{
+		nameToReplicaset: map[string]*Replicaset{
+			"replicaset_1": {
+				conn: mp,
+			},
+		},
+		cfg: Config{
+			Loggerf: emptyLogfProvider,
+		},
+	}
+
+	err := router.Topology().RemoveInstance(ctx, "", instanceName)
+	require.NoError(t, err)
+
 }
 
 func TestController_RemoveReplicaset(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	uuidToRemove := uuid.New()
-	mPool := mockpool.NewPool(t)
+	mPool := mockpool.NewPooler(t)
 	mPool.On("CloseGraceful").Return(nil)
 
 	router := Router{
@@ -108,4 +143,28 @@ func TestRouter_AddReplicaset_AlreadyExists(t *testing.T) {
 	// Test that such replicaset already exists
 	err := router.AddReplicaset(ctx, ReplicasetInfo{Name: alreadyExistingRsName}, []InstanceInfo{})
 	require.Equalf(t, ErrReplicasetExists, err, "such replicaset must already exists")
+}
+
+func TestRouter_AddReplicaset_InvalidReplicaset(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.TODO()
+
+	alreadyExistingRsName := uuid.New().String()
+
+	router := Router{
+		nameToReplicaset: map[string]*Replicaset{
+			alreadyExistingRsName: {conn: nil},
+		},
+		cfg: Config{
+			Loggerf: emptyLogfProvider,
+		},
+	}
+
+	// Test that such replicaset already exists
+	rsInfo := ReplicasetInfo{}
+
+	err := router.AddReplicaset(ctx, rsInfo, []InstanceInfo{})
+	require.Error(t, err)
+	require.Equal(t, rsInfo.Validate().Error(), err.Error())
 }

@@ -39,7 +39,7 @@ cover: test ## Generate and open the HTML report for test coverage.
 	 $(GO_CMD) tool cover -html=coverage.out
 
 generate/mocks:
-	mockery --name=Pool --case=underscore --output=mocks/pool --outpkg=mockpool # need fix it later
+	mockery --name=Pooler --case=underscore --output=mocks/pool --outpkg=mockpool # need fix it later
 	mockery --name=TopologyController --case=underscore --output=mocks/topology --outpkg=mocktopology
 
 .PHONY: lint

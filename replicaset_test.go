@@ -49,7 +49,7 @@ func TestReplicaset_BucketStat(t *testing.T) {
 		errFuture := tarantool.NewFuture(tarantool.NewCallRequest("test"))
 		errFuture.SetError(futureError)
 
-		mPool := mockpool.NewPool(t)
+		mPool := mockpool.NewPooler(t)
 		mPool.On("Do", mock.Anything, mock.Anything).Return(errFuture)
 		rs.conn = mPool
 
@@ -65,7 +65,7 @@ func TestReplicaset_BucketStat(t *testing.T) {
 		err := f.SetResponse(tarantool.Header{}, bytes.NewReader(bts))
 		require.NoError(t, err)
 
-		mPool := mockpool.NewPool(t)
+		mPool := mockpool.NewPooler(t)
 		mPool.On("Do", mock.Anything, mock.Anything).Return(f)
 		rs.conn = mPool
 
