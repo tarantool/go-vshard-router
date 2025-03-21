@@ -7,7 +7,7 @@ require (
 	github.com/snksoft/crc v1.1.0
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
-	github.com/tarantool/go-tarantool/v2 v2.2.1
+	github.com/tarantool/go-tarantool/v2 v2.3.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.etcd.io/etcd/client/v2 v2.305.17
 	go.etcd.io/etcd/client/v3 v3.5.17

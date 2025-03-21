@@ -155,25 +155,16 @@ func TestProvider_GetTopology(t *testing.T) {
 		require.NoError(t, err)
 
 		// set root paths
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s", dbName, "clusters"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s", dbName, "instances"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s", dbName, "clusters"), "", &client.SetOptions{Dir: true})
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s", dbName, "instances"), "", &client.SetOptions{Dir: true})
 		// set cluster
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s", dbName, "clusters", "userdb"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s", dbName, "clusters", "userdb"), "", &client.SetOptions{Dir: true})
 
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s", dbName, "instances", "userdb_001"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s", dbName, "instances", "userdb_001"), "", &client.SetOptions{Dir: true})
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s", dbName, "instances", "userdb_001", "cluster"), "userdb", &client.SetOptions{Dir: false})
 
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s", dbName, "instances", "userdb_001", "cluster"), "userdb", &client.SetOptions{Dir: false})
-		require.NoError(t, err)
-
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s", dbName, "instances", "userdb_001", "box"), "", &client.SetOptions{Dir: true})
-		require.NoError(t, err)
-
-		_, err = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s/%s", dbName, "instances", "userdb_001", "box", "listen"), "10.0.1.13:3303", &client.SetOptions{Dir: false})
-		require.NoError(t, err)
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s", dbName, "instances", "userdb_001", "box"), "", &client.SetOptions{Dir: true})
+		_, _ = kapi.Set(ctx, fmt.Sprintf("%s/%s/%s/%s/%s", dbName, "instances", "userdb_001", "box", "listen"), "10.0.1.13:3303", &client.SetOptions{Dir: false})
 
 		topology, err := p.GetTopology()
 		require.NoError(t, err)

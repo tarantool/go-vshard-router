@@ -1,5 +1,11 @@
 ## Unreleased
 
+CHANGES:
+* Bump go-tarantool from v2.2.1 to v2.3.0.
+
+TESTS:
+* Fixed etcd overlapping ports.
+
 ## v2.0.4
 
 CHANGES:

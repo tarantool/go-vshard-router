@@ -867,11 +867,11 @@ func runTestMain(m *testing.M) int {
 		RetryTimeout: 500 * time.Millisecond,
 		WorkDir:      "router",
 	})
-
 	if err != nil {
 		log.Printf("Failed to prepare test Tarantool: %s", err)
 		return 1
 	}
+	time.Sleep(time.Second / 2) // force await bootstrap
 
 	defer test_helpers.StopTarantoolWithCleanup(inst)
 	defer test_helpers.StopTarantoolInstances(instances)
