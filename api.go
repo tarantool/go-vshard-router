@@ -31,12 +31,18 @@ func (c VshardMode) String() string {
 }
 
 type vshardStorageCallResponseProto struct {
+	metrics MetricsProvider
+
 	AssertError *assertError            // not nil if there is assert error
 	VshardError *StorageCallVShardError // not nil if there is vshard response
 	CallResp    VshardRouterCallResp
 }
 
 func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error {
+	t := time.Now()
+	defer func() {
+		r.metrics.DecodeDuration(time.Since(t), false)
+	}()
 	/* vshard.storage.call(func) response has the next 4 possbile formats:
 	See: https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/storage/init.lua#L3130
 	1. vshard error has occurred:
@@ -264,7 +270,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	for {
 		if spent := time.Since(requestStartTime); spent > timeout {
-			r.metrics().RequestDuration(spent, false, false)
+			r.metrics().RequestDuration(spent, fnc, false, false)
 
 			r.log().Debugf(ctx, "Return result on timeout; spent %s of timeout %s", spent, timeout)
 			if err == nil {
@@ -291,7 +297,10 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 		r.log().Infof(ctx, "Try call %s on replicaset %s for bucket %d", fnc, rs.info.Name, bucketID)
 
-		var storageCallResponse vshardStorageCallResponseProto
+		storageCallResponse := vshardStorageCallResponseProto{
+			metrics: r.metrics(),
+		}
+
 		err = rs.conn.Do(tntReq, poolMode).GetTyped(&storageCallResponse)
 		if err != nil {
 			return VshardRouterCallResp{}, fmt.Errorf("got error on future.GetTyped(): %w", err)
@@ -378,7 +387,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			}
 		}
 
-		r.metrics().RequestDuration(time.Since(requestStartTime), true, false)
+		r.metrics().RequestDuration(time.Since(requestStartTime), fnc, true, false)
 
 		return storageCallResponse.CallResp, nil
 	}
@@ -421,12 +430,19 @@ type RouterMapCallRWOptions struct {
 }
 
 type storageMapResponseProto[T any] struct {
+	metrics MetricsProvider
+
 	ok    bool
 	value T
 	err   StorageCallVShardError
 }
 
 func (r *storageMapResponseProto[T]) DecodeMsgpack(d *msgpack.Decoder) error {
+	t := time.Now()
+	defer func() {
+		r.metrics.DecodeDuration(time.Since(t), true)
+	}()
+
 	// proto for 'storage_map' method
 	// https://github.com/tarantool/vshard/blob/8d299bfecff8bc656056658350ad48c829f9ad3f/vshard/storage/init.lua#L3158
 	respArrayLen, err := d.DecodeArrayLen()
@@ -638,7 +654,9 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	// map stage: get their responses
 	nameToResult := make(map[string]T)
 	for _, rsFuture := range rsFutures {
-		var storageMapResponse storageMapResponseProto[T]
+		storageMapResponse := storageMapResponseProto[T]{
+			metrics: r.metrics(),
+		}
 
 		err := rsFuture.future.GetTyped(&storageMapResponse)
 		if err != nil {
@@ -652,7 +670,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		nameToResult[rsFuture.name] = storageMapResponse.value
 	}
 
-	r.metrics().RequestDuration(time.Since(timeStart), true, true)
+	r.metrics().RequestDuration(time.Since(timeStart), fnc, true, true)
 
 	return nameToResult, nil
 }
