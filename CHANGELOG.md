@@ -11,6 +11,7 @@ CHANGES:
 * Bump go-tarantool from v2.2.1 to v2.3.0.
 * Make comments more go-style.
 * Router.cronDiscovery: log panic in another goroutine.
+* Tiny optimization in SlogLoggerf.
 
 TESTS:
 * Fixed etcd overlapping ports.
