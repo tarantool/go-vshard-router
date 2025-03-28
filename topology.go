@@ -11,6 +11,8 @@ import (
 var (
 	ErrReplicasetExists    = fmt.Errorf("replicaset already exists")
 	ErrReplicasetNotExists = fmt.Errorf("replicaset not exists")
+
+	ErrConcurrentTopologyChangeDetected = fmt.Errorf("concurrent topology change detected")
 )
 
 // TopologyController is an entity that allows you to interact with the topology.
@@ -33,18 +35,21 @@ func copyMap[K comparable, V any](m map[K]V) map[K]V {
 	return copy
 }
 
-func (r *Router) getNameToReplicaset() map[string]*Replicaset {
-	r.nameToReplicasetMutex.RLock()
-	nameToReplicasetRef := r.nameToReplicaset
-	r.nameToReplicasetMutex.RUnlock()
-
-	return nameToReplicasetRef
+func (r *Router) setEmptyNameToReplicaset() {
+	var nameToReplicasetRef map[string]*Replicaset
+	_ = r.swapNameToReplicaset(nil, &nameToReplicasetRef)
 }
 
-func (r *Router) setNameToReplicaset(nameToReplicasetNew map[string]*Replicaset) {
-	r.nameToReplicasetMutex.Lock()
-	r.nameToReplicaset = nameToReplicasetNew
-	r.nameToReplicasetMutex.Unlock()
+func (r *Router) swapNameToReplicaset(old, new *map[string]*Replicaset) error {
+	if swapped := r.nameToReplicaset.CompareAndSwap(old, new); !swapped {
+		return ErrConcurrentTopologyChangeDetected
+	}
+	return nil
+}
+
+func (r *Router) getNameToReplicaset() map[string]*Replicaset {
+	ptr := r.nameToReplicaset.Load()
+	return *ptr
 }
 
 func (r *Router) Topology() TopologyController {
@@ -121,9 +126,8 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 		return err
 	}
 
-	nameToReplicasetOld := r.getNameToReplicaset()
-
-	if _, ok := nameToReplicasetOld[rsInfo.Name]; ok {
+	nameToReplicasetOldPtr := r.nameToReplicaset.Load()
+	if _, ok := (*nameToReplicasetOldPtr)[rsInfo.Name]; ok {
 		return ErrReplicasetExists
 	}
 
@@ -168,14 +172,14 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 	}
 
 	// Create an entirely new map object
-	nameToReplicasetNew := copyMap(nameToReplicasetOld)
+	nameToReplicasetNew := copyMap(*nameToReplicasetOldPtr)
 	nameToReplicasetNew[rsInfo.Name] = replicaset // add when conn is ready
 
-	// We could detect concurrent access to the TopologyController interface
-	// by comparing references to r.idToReplicaset and idToReplicasetOld.
-	// But it requires reflection which I prefer to avoid.
-	// See: https://stackoverflow.com/questions/58636694/how-to-know-if-2-go-maps-reference-the-same-data.
-	r.setNameToReplicaset(nameToReplicasetNew)
+	if err = r.swapNameToReplicaset(nameToReplicasetOldPtr, &nameToReplicasetNew); err != nil {
+		// replicaset has not added, so just close it
+		_ = replicaset.conn.Close()
+		return err
+	}
 
 	return nil
 }
@@ -198,18 +202,19 @@ func (r *Router) AddReplicasets(ctx context.Context, replicasets map[ReplicasetI
 func (r *Router) RemoveReplicaset(ctx context.Context, rsName string) []error {
 	r.log().Debugf(ctx, "Trying to remove replicaset %s from router topology", rsName)
 
-	nameToReplicasetOld := r.getNameToReplicaset()
-
-	rs := nameToReplicasetOld[rsName]
+	nameToReplicasetOldPtr := r.nameToReplicaset.Load()
+	rs := (*nameToReplicasetOldPtr)[rsName]
 	if rs == nil {
 		return []error{ErrReplicasetNotExists}
 	}
 
 	// Create an entirely new map object
-	nameToReplicasetNew := copyMap(nameToReplicasetOld)
+	nameToReplicasetNew := copyMap(*nameToReplicasetOldPtr)
 	delete(nameToReplicasetNew, rsName)
 
-	r.setNameToReplicaset(nameToReplicasetNew)
+	if err := r.swapNameToReplicaset(nameToReplicasetOldPtr, &nameToReplicasetNew); err != nil {
+		return []error{err}
+	}
 
 	return rs.conn.CloseGraceful()
 }
