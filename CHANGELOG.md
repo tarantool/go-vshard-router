@@ -16,6 +16,7 @@ CHANGES:
 TESTS:
 * Fixed etcd overlapping ports.
 * Fixed Pooler mocks generation.
+* Return back TestConncurrentTopologyChange.
 
 ## v2.0.4
 
