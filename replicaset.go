@@ -101,8 +101,8 @@ func (r *vshardStorageBucketStatResponseProto) DecodeMsgpack(d *msgpack.Decoder)
 		return err
 	}
 
-	if respArrayLen == 0 {
-		return fmt.Errorf("protocol violation bucketStatWait: empty response")
+	if respArrayLen <= 0 {
+		return fmt.Errorf("protocol violation bucketStatWait: respArrayLen=%d", respArrayLen)
 	}
 
 	code, err := d.PeekCode()
