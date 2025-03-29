@@ -23,11 +23,11 @@ func TestController_AddInstance(t *testing.T) {
 
 	t.Run("no such replicaset", func(t *testing.T) {
 		router := Router{
-			nameToReplicaset: map[string]*Replicaset{},
 			cfg: Config{
 				Loggerf: emptyLogfProvider,
 			},
 		}
+		router.setEmptyNameToReplicaset()
 
 		err := router.Topology().AddInstance(ctx, uuid.New().String(), InstanceInfo{
 			Addr: "127.0.0.1:8060",
@@ -38,11 +38,11 @@ func TestController_AddInstance(t *testing.T) {
 
 	t.Run("invalid instance info", func(t *testing.T) {
 		router := Router{
-			nameToReplicaset: map[string]*Replicaset{},
 			cfg: Config{
 				Loggerf: emptyLogfProvider,
 			},
 		}
+		router.setEmptyNameToReplicaset()
 
 		err := router.Topology().AddInstance(ctx, uuid.New().String(), InstanceInfo{})
 		require.True(t, errors.Is(err, ErrInvalidInstanceInfo))
@@ -54,11 +54,11 @@ func TestController_RemoveInstance_NoSuchReplicaset(t *testing.T) {
 	ctx := context.Background()
 
 	router := Router{
-		nameToReplicaset: map[string]*Replicaset{},
 		cfg: Config{
 			Loggerf: emptyLogfProvider,
 		},
 	}
+	router.setEmptyNameToReplicaset()
 
 	err := router.Topology().RemoveInstance(ctx, uuid.New().String(), "")
 	require.True(t, errors.Is(err, ErrReplicasetNotExists))
@@ -81,15 +81,15 @@ func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
 	mp.On("Remove", mock.Anything).Return(nil)
 
 	router := Router{
-		nameToReplicaset: map[string]*Replicaset{
-			"replicaset_1": {
-				conn: mp,
-			},
-		},
 		cfg: Config{
 			Loggerf: emptyLogfProvider,
 		},
 	}
+	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+		"replicaset_1": {
+			conn: mp,
+		},
+	})
 
 	err := router.Topology().RemoveInstance(ctx, "", instanceName)
 	require.NoError(t, err)
@@ -106,13 +106,13 @@ func TestController_RemoveReplicaset(t *testing.T) {
 	mPool.On("CloseGraceful").Return(nil)
 
 	router := Router{
-		nameToReplicaset: map[string]*Replicaset{
-			uuidToRemove.String(): {conn: mPool},
-		},
 		cfg: Config{
 			Loggerf: emptyLogfProvider,
 		},
 	}
+	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+		uuidToRemove.String(): {conn: mPool},
+	})
 
 	t.Run("no such replicaset", func(t *testing.T) {
 		t.Parallel()
@@ -132,13 +132,13 @@ func TestRouter_AddReplicaset_AlreadyExists(t *testing.T) {
 	alreadyExistingRsName := uuid.New().String()
 
 	router := Router{
-		nameToReplicaset: map[string]*Replicaset{
-			alreadyExistingRsName: {conn: nil},
-		},
 		cfg: Config{
 			Loggerf: emptyLogfProvider,
 		},
 	}
+	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+		alreadyExistingRsName: {conn: nil},
+	})
 
 	// Test that such replicaset already exists
 	err := router.AddReplicaset(ctx, ReplicasetInfo{Name: alreadyExistingRsName}, []InstanceInfo{})
@@ -153,13 +153,13 @@ func TestRouter_AddReplicaset_InvalidReplicaset(t *testing.T) {
 	alreadyExistingRsName := uuid.New().String()
 
 	router := Router{
-		nameToReplicaset: map[string]*Replicaset{
-			alreadyExistingRsName: {conn: nil},
-		},
 		cfg: Config{
 			Loggerf: emptyLogfProvider,
 		},
 	}
+	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+		alreadyExistingRsName: {conn: nil},
+	})
 
 	// Test that such replicaset already exists
 	rsInfo := ReplicasetInfo{}

@@ -12,10 +12,12 @@ CHANGES:
 * Make comments more go-style.
 * Router.cronDiscovery: log panic in another goroutine.
 * Tiny optimization in SlogLoggerf.
+* Get rid of nameToReplicasetMutex, use atomic instead.
 
 TESTS:
 * Fixed etcd overlapping ports.
 * Fixed Pooler mocks generation.
+* Return back TestConncurrentTopologyChange.
 
 ## v2.0.4
 
