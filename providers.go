@@ -133,11 +133,12 @@ func (s SlogLoggerf) Errorf(ctx context.Context, format string, v ...any) {
 
 // Metrics
 
-// MetricsProvider is an interface for passing library metrics to your prometheus/graphite and other metrics
+// MetricsProvider is an interface for passing library metrics to your prometheus/graphite and other metrics.
+// This logic is experimental and may be changed in the release.
 type MetricsProvider interface {
 	CronDiscoveryEvent(ok bool, duration time.Duration, reason string)
 	RetryOnCall(reason string)
-	RequestDuration(duration time.Duration, ok bool, mapReduce bool)
+	RequestDuration(duration time.Duration, procedure string, ok, mapReduce bool)
 }
 
 // EmptyMetrics is default empty metrics provider
@@ -146,7 +147,7 @@ type EmptyMetrics struct{}
 
 func (e *EmptyMetrics) CronDiscoveryEvent(_ bool, _ time.Duration, _ string) {}
 func (e *EmptyMetrics) RetryOnCall(_ string)                                 {}
-func (e *EmptyMetrics) RequestDuration(_ time.Duration, _ bool, _ bool)      {}
+func (e *EmptyMetrics) RequestDuration(_ time.Duration, _ string, _, _ bool) {}
 
 // TopologyProvider is external module that can lookup current topology of cluster
 // it might be etcd/config/consul or smth else
