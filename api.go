@@ -60,7 +60,7 @@ func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error
 		return err
 	}
 
-	if respArrayLen == 0 {
+	if respArrayLen <= 0 {
 		return fmt.Errorf("protocol violation: invalid array length: %d", respArrayLen)
 	}
 
@@ -119,11 +119,24 @@ func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error
 	// isVShardRespOk is true
 	buf := bytes.NewBuffer(nil)
 
-	buf.WriteByte(msgpcode.FixedArrayLow | byte(respArrayLen-1))
+	switch outputLen := respArrayLen - 1; {
+	case outputLen < 16:
+		// This way of encoding len for msgpack array works only for len < 16.
+		// The case when len >= 16 is not possible currently, since it is limited by 3
+		// due to lua vshard storage implementation. See:
+		// https://github.com/tarantool/vshard/blob/76b3ad19b539150bf597a5ffec91b97758b69a00/vshard/storage/init.lua#L3168
+		// However, it may change over time, so we should be ready to this.
+		err = buf.WriteByte(msgpcode.FixedArrayLow | byte(outputLen))
+		if err != nil {
+			return fmt.Errorf("can't buf.WriteByte to encode outputLen: %w", err)
+		}
+	default:
+		return fmt.Errorf("unexpected outputLen: %d", outputLen)
+	}
 
 	_, err = buf.ReadFrom(d.Buffered())
 	if err != nil {
-		return err
+		return fmt.Errorf("can't buf.ReadFrom: %w", err)
 	}
 
 	r.CallResp.buf = buf
@@ -443,7 +456,7 @@ func (r *storageMapResponseProto[T]) DecodeMsgpack(d *msgpack.Decoder) error {
 		return err
 	}
 
-	if respArrayLen == 0 {
+	if respArrayLen <= 0 {
 		return fmt.Errorf("protocol violation: invalid array length: %d", respArrayLen)
 	}
 
@@ -507,7 +520,7 @@ func (r *storageRefResponseProto) DecodeMsgpack(d *msgpack.Decoder) error {
 		return err
 	}
 
-	if respArrayLen == 0 {
+	if respArrayLen <= 0 {
 		return fmt.Errorf("protocol violation: invalid array length: %d", respArrayLen)
 	}
 
