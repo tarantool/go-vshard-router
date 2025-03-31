@@ -1,5 +1,8 @@
 ## Unreleased
 
+CHANGES:
+* Slog provider moved to providers directory.
+
 ## v2.0.5
 
 The go-vshard team apologizes for changing the interfaces to experimental status.
