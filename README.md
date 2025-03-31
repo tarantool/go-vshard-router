@@ -195,7 +195,7 @@ Metrics providers are also available,
 you can use ready-made metrics providers that can be registered in prometheus and passed to go-vshard-router.
 This will allow you not to think about options and metrics settings.
 The following providers are currently available:
-- [prometheus](providers/prometheus)
+- **[prometheus](providers/prometheus)**
 
 ### Learn more examples
 #### Quick Start

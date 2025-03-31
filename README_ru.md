@@ -206,7 +206,7 @@ func main() {
 которые можно зарегестрировать в prometheus и передать go-vshard-router.
 Что позволит вам не задумываться над опциями и настройкой метрик. 
 На данный момент доступны следующие провайдеры:
-- [prometheus](providers/prometheus)
+- **[prometheus](providers/prometheus)**
 
 ### Ознакомьтесь с другими примерами
 
