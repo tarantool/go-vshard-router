@@ -1,5 +1,7 @@
 ## Unreleased
 
+## v2.0.5
+
 The go-vshard team apologizes for changing the interfaces to experimental status.
 This is due to an inherently bad approach to controversial interfaces.
 
