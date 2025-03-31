@@ -208,6 +208,12 @@ func main() {
 На данный момент доступны следующие провайдеры:
 - **[prometheus](providers/prometheus)**
 
+#### Логирование
+
+- stdout (builtin)
+- **[slog](providers/slog)**
+
+
 ### Ознакомьтесь с другими примерами
 
 #### Быстрое начало

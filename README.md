@@ -197,6 +197,11 @@ This will allow you not to think about options and metrics settings.
 The following providers are currently available:
 - **[prometheus](providers/prometheus)**
 
+#### Logs
+
+- stdout (builtin)
+- **[slog](providers/slog)**
+
 ### Learn more examples
 #### Quick Start
 Learn with th [Quick Start](docs/doc.md), which include  examples and theory.

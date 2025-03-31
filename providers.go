@@ -2,9 +2,7 @@ package vshard_router //nolint:revive
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"log/slog"
 	"time"
 )
 
@@ -15,7 +13,6 @@ var (
 	// Ensure StdoutLoggerf implements LogfProvider
 	_ LogfProvider = StdoutLoggerf{}
 	// Ensure SlogLoggerf implements LogfProvider
-	_ LogfProvider = &SlogLoggerf{}
 )
 
 // LogfProvider an interface to inject a custom logger.
@@ -85,50 +82,6 @@ func (s StdoutLoggerf) Warnf(_ context.Context, format string, v ...any) {
 // Errorf implements Errorf method for LogfProvider interface
 func (s StdoutLoggerf) Errorf(_ context.Context, format string, v ...any) {
 	s.printLevel(StdoutLogError, "[ERROR] ", format, v...)
-}
-
-// NewSlogLogger wraps slog logger
-func NewSlogLogger(logger *slog.Logger) LogfProvider {
-	return &SlogLoggerf{
-		Logger: logger,
-	}
-}
-
-// SlogLoggerf is adapter for slog to Logger interface.
-type SlogLoggerf struct {
-	Logger *slog.Logger
-}
-
-// Debugf implements Debugf method for LogfProvider interface
-func (s *SlogLoggerf) Debugf(ctx context.Context, format string, v ...any) {
-	if !s.Logger.Enabled(ctx, slog.LevelDebug) {
-		return
-	}
-	s.Logger.DebugContext(ctx, fmt.Sprintf(format, v...))
-}
-
-// Infof implements Infof method for LogfProvider interface
-func (s SlogLoggerf) Infof(ctx context.Context, format string, v ...any) {
-	if !s.Logger.Enabled(ctx, slog.LevelInfo) {
-		return
-	}
-	s.Logger.InfoContext(ctx, fmt.Sprintf(format, v...))
-}
-
-// Warnf implements Warnf method for LogfProvider interface
-func (s SlogLoggerf) Warnf(ctx context.Context, format string, v ...any) {
-	if !s.Logger.Enabled(ctx, slog.LevelWarn) {
-		return
-	}
-	s.Logger.WarnContext(ctx, fmt.Sprintf(format, v...))
-}
-
-// Errorf implements Errorf method for LogfProvider interface
-func (s SlogLoggerf) Errorf(ctx context.Context, format string, v ...any) {
-	if !s.Logger.Enabled(ctx, slog.LevelError) {
-		return
-	}
-	s.Logger.ErrorContext(ctx, fmt.Sprintf(format, v...))
 }
 
 // Metrics
