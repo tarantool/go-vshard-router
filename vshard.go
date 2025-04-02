@@ -3,7 +3,6 @@ package vshard_router //nolint:revive
 import (
 	"context"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,15 +29,13 @@ type routeMap = []atomic.Pointer[Replicaset]
 type Router struct {
 	cfg Config
 
-	// nameToReplicasetMutex guards not the map itself, but the variable idToReplicaset.
-	// nameToReplicaset is an immutable object by our convention.
+	// nameToReplicaset is an atomic pointer, that points to an immutable object by our convention.
 	// Whenever we add or remove a replicaset, we create a new map object.
-	// nameToReplicaset can be modified only by TopologyController methods.
+	// Object under nameToReplicaset can be replaced to a new one only by TopologyController methods.
 	// Assuming that we rarely add or remove some replicaset,
 	// it should be the simplest and most efficient way of handling concurrent access.
 	// Additionally, we can safely iterate over a map because it never changes.
-	nameToReplicasetMutex sync.RWMutex
-	nameToReplicaset      map[string]*Replicaset
+	nameToReplicaset atomic.Pointer[map[string]*Replicaset]
 
 	routeMap atomic.Pointer[routeMap]
 
@@ -204,10 +201,10 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	}
 
 	router := &Router{
-		cfg:              cfg,
-		nameToReplicaset: make(map[string]*Replicaset),
+		cfg: cfg,
 	}
 	router.setEmptyRouteMap()
+	router.setEmptyNameToReplicaset()
 
 	err = cfg.TopologyProvider.Init(router.Topology())
 	if err != nil {

@@ -9,14 +9,6 @@ import (
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
 
-var emptyRouter = &Router{
-	cfg: Config{
-		TotalBucketCount: uint64(10),
-		Loggerf:          emptyLogfProvider,
-		Metrics:          emptyMetricsProvider,
-	},
-}
-
 func TestVshardMode_String_NotEmpty(t *testing.T) {
 	t.Parallel()
 	require.NotEmpty(t, ReadMode.String())
@@ -25,6 +17,14 @@ func TestVshardMode_String_NotEmpty(t *testing.T) {
 
 func TestRouter_RouterRouteAll(t *testing.T) {
 	t.Parallel()
+	var emptyRouter = &Router{
+		cfg: Config{
+			TotalBucketCount: uint64(10),
+			Loggerf:          emptyLogfProvider,
+			Metrics:          emptyMetricsProvider,
+		},
+	}
+	emptyRouter.setEmptyNameToReplicaset()
 	m := emptyRouter.RouteAll()
 	require.Empty(t, m)
 }

@@ -3,6 +3,7 @@
 CHANGES:
 * Slog provider moved to providers directory.
 * More strict check of vshard.storage.call response.
+* Get rid of nameToReplicasetMutex, use atomic instead.
 
 ## v2.0.5
 
