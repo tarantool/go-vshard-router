@@ -2,6 +2,7 @@
 
 CHANGES:
 * Slog provider moved to providers directory.
+* More strict check of vshard.storage.call response.
 
 ## v2.0.5
 
@@ -23,7 +24,6 @@ CHANGES:
 * Tiny optimization in SlogLoggerf.
 * The MetricsProvider interface has been made experimental. This means that during the release we may change its implementation. If you do not want to lose backward compatibility, use empty or the standard prometheus implementation.
 * RequestDuration metric interface requires procedure name.
-* More strict check of vshard.storage.call response.
 
 TESTS:
 * Fixed etcd overlapping ports.
