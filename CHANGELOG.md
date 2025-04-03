@@ -3,6 +3,7 @@
 CHANGES:
 * Slog provider moved to providers directory.
 * More strict check of vshard.storage.call response.
+* Add pause before retrying r.Route in Router.Call method.
 
 ## v2.0.5
 

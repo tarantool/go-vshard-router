@@ -296,9 +296,12 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			// this error will be returned to a caller in case of timeout
 			err = fmt.Errorf("cant resolve bucket %d: %w", bucketID, err)
 
-			// TODO: lua vshard router just yields here and retires, no pause is applied.
-			// https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L713
-			// So we also retry here. But I guess we should add some pause here.
+			// A lua vshard router just yields here and retires, no pause is applied.
+			// But without a pause we have few problems, see: https://github.com/tarantool/go-vshard-router/issues/66.
+			// So, pause here, for example, for 50 ms.
+			const defaultRouteRetryPause = 50 * time.Millisecond
+			time.Sleep(defaultRouteRetryPause)
+
 			continue
 		}
 
