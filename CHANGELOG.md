@@ -3,6 +3,7 @@
 CHANGES:
 * Slog provider moved to providers directory.
 * More strict check of vshard.storage.call response.
+* Bump go-tarantool from v2.3.0 to v2.3.1.
 
 ## v2.0.5
 
