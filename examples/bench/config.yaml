@@ -1,0 +1,5 @@
+storages:
+  storage_1_a: "tarantool-storage-1-a:3301"
+  storage_1_b: "tarantool-storage-1-b:3302"
+  storage_2_a: "tarantool-storage-2-a:3303"
+  storage_2_b: "tarantool-storage-2-b:3304"

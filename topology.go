@@ -133,6 +133,12 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 
 	rsInstances := make([]pool.Instance, 0, len(instances))
 	for _, instance := range instances {
+		if instance.Name == "" {
+			instance.Name = instance.UUID.String()
+
+			r.log().Warnf(ctx, "Instance name is empty, using uuid (%s) instead", instance.Name)
+		}
+
 		rsInstances = append(rsInstances, pool.Instance{
 			Name: instance.Name,
 			Dialer: tarantool.NetDialer{
