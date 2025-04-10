@@ -6,6 +6,10 @@ CHANGES:
 * Bump go-tarantool from v2.3.0 to v2.3.1.
 * Get rid of nameToReplicasetMutex, use atomic instead.
 * Add configurable pause before retrying r.Route in Router.Call method.
+* Metrics provider now requires replicaset name.
+
+FEATURES:
+* Add replicaset name support for prometheus provider.
 
 ## v2.0.5
 

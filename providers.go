@@ -91,16 +91,16 @@ func (s StdoutLoggerf) Errorf(_ context.Context, format string, v ...any) {
 type MetricsProvider interface {
 	CronDiscoveryEvent(ok bool, duration time.Duration, reason string)
 	RetryOnCall(reason string)
-	RequestDuration(duration time.Duration, procedure string, ok, mapReduce bool)
+	RequestDuration(duration time.Duration, procedure, rsName string, ok, mapReduce bool)
 }
 
 // EmptyMetrics is default empty metrics provider
 // you can embed this type and realize just some metrics
 type EmptyMetrics struct{}
 
-func (e *EmptyMetrics) CronDiscoveryEvent(_ bool, _ time.Duration, _ string) {}
-func (e *EmptyMetrics) RetryOnCall(_ string)                                 {}
-func (e *EmptyMetrics) RequestDuration(_ time.Duration, _ string, _, _ bool) {}
+func (e *EmptyMetrics) CronDiscoveryEvent(_ bool, _ time.Duration, _ string)    {}
+func (e *EmptyMetrics) RetryOnCall(_ string)                                    {}
+func (e *EmptyMetrics) RequestDuration(_ time.Duration, _, _ string, _, _ bool) {}
 
 // TopologyProvider is external module that can lookup current topology of cluster
 // it might be etcd/config/consul or smth else
