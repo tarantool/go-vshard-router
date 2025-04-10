@@ -5,6 +5,10 @@ CHANGES:
 * More strict check of vshard.storage.call response.
 * Bump go-tarantool from v2.3.0 to v2.3.1.
 * Get rid of nameToReplicasetMutex, use atomic instead.
+* Metrics provider now requires replicaset name.
+
+FEATURES:
+* Add replicaset name support for prometheus provider.
 
 ## v2.0.5
 
