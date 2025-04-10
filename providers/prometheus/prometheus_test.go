@@ -23,7 +23,7 @@ func TestPrometheusMetricsServer(t *testing.T) {
 
 	provider.CronDiscoveryEvent(true, 150*time.Millisecond, "success")
 	provider.RetryOnCall("timeout")
-	provider.RequestDuration(200*time.Millisecond, "test", true, false)
+	provider.RequestDuration(200*time.Millisecond, "test", "test-rs", true, false)
 
 	resp, err := http.Get(server.URL + "/metrics")
 	require.NoError(t, err)
