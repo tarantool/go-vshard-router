@@ -5,6 +5,7 @@ CHANGES:
 * More strict check of vshard.storage.call response.
 * Bump go-tarantool from v2.3.0 to v2.3.1.
 * Get rid of nameToReplicasetMutex, use atomic instead.
+* Add configurable pause before retrying r.Route in Router.Call method.
 
 ## v2.0.5
 

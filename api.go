@@ -185,6 +185,10 @@ func (s StorageCallVShardError) Error() string {
 
 type CallOpts struct {
 	Timeout time.Duration
+	// RouteRetryPause is a pause before the next attempt of r.Route request
+	// if the previous one fails. The default is 0, which corresponds
+	// to the lua router behavior: there is no pause in this case.
+	RouteRetryPause time.Duration
 }
 
 // CallMode is a type to represent call mode for Router.Call method.
@@ -296,9 +300,12 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			// this error will be returned to a caller in case of timeout
 			err = fmt.Errorf("cant resolve bucket %d: %w", bucketID, err)
 
-			// TODO: lua vshard router just yields here and retires, no pause is applied.
-			// https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L713
-			// So we also retry here. But I guess we should add some pause here.
+			// The lua vshard router just yields here and retires, no pause is applied.
+			// But without a pause we may have few problems, see: https://github.com/tarantool/go-vshard-router/issues/66.
+			if opts.RouteRetryPause > 0 {
+				time.Sleep(opts.RouteRetryPause)
+			}
+
 			continue
 		}
 
