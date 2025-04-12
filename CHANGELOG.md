@@ -15,6 +15,7 @@ This is due to an inherently bad approach to controversial interfaces.
 BUG FIXES:
 * Router.Call bugfix: set destinationName := rs.info.Name if destination exists.
 * Router.Route bugfix: handle outdated *Replicaset object (resolve issue #11).
+* DiscoveryHandleBuckets: identify replicasets by name for logging purpose.
 
 FEATURES:
 * Now when calling RemoveInstance, if an empty replicaset name is passed, the replicaset will be calculated automatically.

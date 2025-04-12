@@ -191,34 +191,54 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 // DiscoveryHandleBuckets arrange downloaded buckets to the route map so as they reference a given replicaset.
 func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buckets []uint64) {
 	routeMap := r.getRouteMap()
-	removedFrom := make(map[*Replicaset]int)
+	removedFrom := make(map[string]int)
+
+	var newRsName string
+	if rs != nil {
+		newRsName = rs.info.Name
+	}
 
 	for _, bucketID := range buckets {
+		// We don't validate bucketID intentionally, because we can't return an error here using the current API.
+		// We can't silence this error too, the caller should know about invalid arguments.
+		// So the only way to inform the caller is to panic here,
+		// that should happen if bucketID is out of the array bounds.
+		// if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
+		// 	continue
+		// }
+
 		oldRs := routeMap[bucketID].Swap(rs)
 
-		if oldRs == rs {
-			continue
+		var oldRsName string
+		if oldRs != nil {
+			oldRsName = oldRs.info.Name
 		}
 
-		// NOTE: oldRs and rs might have the same name, we intentionally don't check this case to keep the logic simple
-
-		// We don't check oldRs for nil here, because it's a valid key too (if rs == nil, it means removed from unknown buckets set)
-		removedFrom[oldRs]++
-	}
-
-	var addedToRs int
-	for rs, removedFromRs := range removedFrom {
-		addedToRs += removedFromRs
-
-		switch rs {
-		case nil:
-			r.log().Debugf(ctx, "Added new %d buckets to the cluster map", removedFromRs)
-		default:
-			r.log().Debugf(ctx, "Removed %d buckets from replicaset %s", removedFromRs, rs.info.Name)
+		if oldRsName != newRsName {
+			// Something has changed.
+			// NOTE: We don't check oldRsName for empty string ("") here,
+			// because it's a valid key too (it means bucketID became known)
+			removedFrom[oldRsName]++
 		}
 	}
 
-	r.log().Infof(ctx, "Added %d buckets to replicaset %s", addedToRs, rs.info.Name)
+	var addedToNewRsTotal int
+	for removedFromRsName, removedFromCount := range removedFrom {
+		addedToNewRsTotal += removedFromCount
+
+		if removedFromRsName == "" {
+			// newRsName cannot be an empty string here due to the previous for-loop above.
+			r.log().Debugf(ctx, "Added new %d buckets to the cluster map", removedFromCount)
+		} else {
+			r.log().Debugf(ctx, "Removed %d buckets from replicaset '%s'", removedFromCount, removedFromRsName)
+		}
+	}
+
+	if newRsName == "" {
+		r.log().Infof(ctx, "Removed %d buckets from the cluster map", addedToNewRsTotal)
+	} else {
+		r.log().Infof(ctx, "Added %d buckets to replicaset '%s'", addedToNewRsTotal, newRsName)
+	}
 }
 
 func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
