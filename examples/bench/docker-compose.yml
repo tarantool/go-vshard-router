@@ -1,0 +1,95 @@
+version: "3"
+services:
+  webserver:
+    build: ./webserver
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - ./config.yaml:/etc/webserver/config.yaml
+    depends_on:
+      - tarantool-storage-1-a
+      - tarantool-storage-1-b
+      - tarantool-storage-2-a
+      - tarantool-storage-2-b
+  prometheus:
+    image: prom/prometheus:v2.53.3
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-remote-write-receiver"
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secret
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+  tarantool-router:
+    image: tarantool/tarantool:2.11.5-ubuntu20.04
+    ports:
+      - "12000:12000"
+    environment:
+      - CONFIG_FILE=/etc/tarantool/config.yaml
+      - TNT_NAME=router
+    volumes:
+      - ./config.yaml:/etc/tarantool/config.yaml
+      - ./config.lua:/etc/tarantool/config.lua
+    command: "tarantool /etc/tarantool/config.lua"
+    depends_on:
+      - tarantool-storage-1-a
+      - tarantool-storage-1-b
+      - tarantool-storage-2-a
+      - tarantool-storage-2-b
+  tarantool-storage-1-a:
+    image: tarantool/tarantool:2.11.5-ubuntu20.04
+    ports:
+      - "3301:3301"
+    environment:
+      - CONFIG_FILE=/etc/tarantool/config.yaml
+      - TNT_NAME=storage_1_a
+    volumes:
+      - ./config.yaml:/etc/tarantool/config.yaml
+      - ./config.lua:/etc/tarantool/config.lua
+    command: "tarantool /etc/tarantool/config.lua"
+  tarantool-storage-1-b:
+    image: tarantool/tarantool:2.11.5-ubuntu20.04
+    ports:
+      - "3302:3302"
+    environment:
+      - CONFIG_FILE=/etc/tarantool/config.yaml
+      - TNT_NAME=storage_1_b
+    volumes:
+      - ./config.yaml:/etc/tarantool/config.yaml
+      - ./config.lua:/etc/tarantool/config.lua
+    command: "tarantool /etc/tarantool/config.lua"
+  tarantool-storage-2-a:
+    image: tarantool/tarantool:2.11.5-ubuntu20.04
+    ports:
+      - "3303:3303"
+    environment:
+      - CONFIG_FILE=/etc/tarantool/config.yaml
+      - TNT_NAME=storage_2_a
+    volumes:
+      - ./config.yaml:/etc/tarantool/config.yaml
+      - ./config.lua:/etc/tarantool/config.lua
+    command: "tarantool /etc/tarantool/config.lua"
+  tarantool-storage-2-b:
+    image: tarantool/tarantool:2.11.5-ubuntu20.04
+    ports:
+      - "3304:3304"
+    environment:
+      - CONFIG_FILE=/etc/tarantool/config.yaml
+      - TNT_NAME=storage_2_b
+    volumes:
+      - ./config.yaml:/etc/tarantool/config.yaml
+      - ./config.lua:/etc/tarantool/config.lua
+    command: "tarantool /etc/tarantool/config.lua"

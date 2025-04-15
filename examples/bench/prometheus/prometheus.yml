@@ -1,0 +1,39 @@
+# Глобальные настройки
+global:
+  scrape_interval: 1s  # Интервал сбора метрик (раз в 15 секунд). По умолчанию 1 минута.
+  evaluation_interval: 1s  # Интервал оценки правил алертов (раз в 15 секунд). По умолчанию 1 минута.
+  # scrape_timeout используется значение по умолчанию (10 секунд).
+
+
+# Конфигурация Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093  # Адрес экземпляра Alertmanager (закомментировано, т.е. не используется)
+
+# Файлы с правилами для алертов и записанных метрик
+rule_files:
+# - "first_rules.yml"   # Файл с правилами (закомментировано)
+# - "second_rules.yml"  # Еще один файл с правилами (закомментировано)
+
+# Конфигурация задач для сбора метрик (scrape jobs)
+scrape_configs:
+  # Первая задача — сбор метрик самого Prometheus
+  - job_name: 'prometheus'  # Название задачи
+
+    # metrics_path по умолчанию: '/metrics'
+    # scheme по умолчанию: 'http'
+
+    static_configs:
+      - targets: ['localhost:9090']  # Prometheus собирает метрики с самого себя (localhost:9090)
+
+  # Вторая задача — сбор метрик с веб-сервера
+  - job_name: 'webserver'  # Название задачи для веб-сервера
+    static_configs:
+      - targets:
+        - 'webserver:8080'  # Prometheus собирает метрики с веб-сервера по адресу webserver:8080
+  # Вторая задача — сбор метрик с веб-сервера
+  - job_name: 'tarantool'  # Название задачи для веб-сервера
+    static_configs:
+      - targets: ['tarantool-router:8081', 'tarantool-storage-1-a:8081', 'tarantool-storage-1-b:8081', 'tarantool-storage-2-a:8081', 'tarantool-storage-2-b:8081']

@@ -24,8 +24,9 @@ type Provider struct {
 	// ctx is root ctx of application
 	ctx context.Context
 
-	kapi client.KeysAPI
-	path string
+	kapi           client.KeysAPI
+	path           string
+	routerTopology vshardrouter.TopologyController
 }
 
 type Config struct {
@@ -162,12 +163,35 @@ func (p *Provider) GetTopology() (map[vshardrouter.ReplicasetInfo][]vshardrouter
 }
 
 func (p *Provider) Init(c vshardrouter.TopologyController) error {
+	p.routerTopology = c
+
 	topology, err := p.GetTopology()
 	if err != nil {
 		return err
 	}
 
 	return c.AddReplicasets(p.ctx, topology)
+}
+
+func (p *Provider) WatchChanges(ctx context.Context) {
+	tc := p.routerTopology
+
+	w := p.kapi.Watcher(p.path, &client.WatcherOptions{
+		Recursive: true,
+	})
+
+	for {
+		resp, err := w.Next(ctx)
+		if err != nil {
+			continue
+		}
+
+		t, err := p.GetTopology()
+		if err != nil {
+			continue
+		}
+
+	}
 }
 
 // Close must close connection, but etcd v2 client has no interfaces for this
