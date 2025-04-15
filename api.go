@@ -281,8 +281,6 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	for {
 		if spent := time.Since(requestStartTime); spent > timeout {
-			r.metrics().RequestDuration(spent, fnc, "", false, false)
-
 			r.log().Debugf(ctx, "Return result on timeout; spent %s of timeout %s", spent, timeout)
 			if err == nil {
 				err = fmt.Errorf("cant get call cause call impl timeout")
@@ -313,18 +311,26 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 		storageCallResponse := vshardStorageCallResponseProto{}
 
+		singleRequestStartTime := time.Now()
 		err = rs.conn.Do(tntReq, poolMode).GetTyped(&storageCallResponse)
 		if err != nil {
+			// Don't track metrics, because the do request has not been performed.
 			return VshardRouterCallResp{}, fmt.Errorf("got error on future.GetTyped(): %w", err)
 		}
+		singleRequestDuration := time.Since(singleRequestStartTime)
 
 		r.log().Debugf(ctx, "Got call result response data %+v", storageCallResponse)
 
 		if storageCallResponse.AssertError != nil {
+			// Request has failed with assert error, but do request has been performed.
+			r.metrics().RequestDuration(singleRequestDuration, fnc, rs.info.Name, false, false)
 			return VshardRouterCallResp{}, fmt.Errorf("%s: %s failed: %+v", vshardStorageClientCall, fnc, storageCallResponse.AssertError)
 		}
 
 		if storageCallResponse.VshardError != nil {
+			// Request has failed with vshard error, but do request has been performed
+			r.metrics().RequestDuration(singleRequestDuration, fnc, rs.info.Name, false, false)
+
 			vshardError := storageCallResponse.VshardError
 
 			switch vshardError.Name {
@@ -407,7 +413,8 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			}
 		}
 
-		r.metrics().RequestDuration(time.Since(requestStartTime), fnc, rs.info.Name, true, false)
+		// Request has succeed, do request has been performed too.
+		r.metrics().RequestDuration(singleRequestDuration, fnc, rs.info.Name, true, false)
 
 		return storageCallResponse.CallResp, nil
 	}
@@ -584,6 +591,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	fnc string, args interface{}, opts RouterMapCallRWOptions,
 ) (map[string]T, error) {
 	const vshardStorageServiceCall = "vshard.storage._call"
+	const rsNameUndefined = ""
 
 	timeout := callTimeoutDefault
 	if opts.Timeout > 0 {
@@ -681,7 +689,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		nameToResult[rsFuture.name] = storageMapResponse.value
 	}
 
-	r.metrics().RequestDuration(time.Since(timeStart), fnc, "all", true, true)
+	r.metrics().RequestDuration(time.Since(timeStart), fnc, rsNameUndefined, true, true)
 
 	return nameToResult, nil
 }
