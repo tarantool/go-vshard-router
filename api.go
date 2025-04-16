@@ -281,7 +281,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	for {
 		if spent := time.Since(requestStartTime); spent > timeout {
-			r.metrics().RequestDuration(spent, fnc, false, false)
+			r.metrics().RequestDuration(spent, fnc, "", false, false)
 
 			r.log().Debugf(ctx, "Return result on timeout; spent %s of timeout %s", spent, timeout)
 			if err == nil {
@@ -407,7 +407,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			}
 		}
 
-		r.metrics().RequestDuration(time.Since(requestStartTime), fnc, true, false)
+		r.metrics().RequestDuration(time.Since(requestStartTime), fnc, rs.info.Name, true, false)
 
 		return storageCallResponse.CallResp, nil
 	}
@@ -681,7 +681,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		nameToResult[rsFuture.name] = storageMapResponse.value
 	}
 
-	r.metrics().RequestDuration(time.Since(timeStart), fnc, true, true)
+	r.metrics().RequestDuration(time.Since(timeStart), fnc, "all", true, true)
 
 	return nameToResult, nil
 }

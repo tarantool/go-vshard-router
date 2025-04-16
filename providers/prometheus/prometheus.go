@@ -55,11 +55,12 @@ func (pp *Provider) RetryOnCall(reason string) {
 }
 
 // RequestDuration records the duration of a request with labels for success and map-reduce usage.
-func (pp *Provider) RequestDuration(duration time.Duration, procedure string, ok, mapReduce bool) {
+func (pp *Provider) RequestDuration(duration time.Duration, procedure, rsName string, ok, mapReduce bool) {
 	pp.requestDuration.With(prometheus.Labels{
 		"ok":         strconv.FormatBool(ok),
 		"map_reduce": strconv.FormatBool(mapReduce),
 		"procedure":  procedure,
+		"replicaset": rsName,
 	}).Observe(float64(duration.Milliseconds()))
 }
 
@@ -98,6 +99,6 @@ func NewPrometheusProvider() *Provider {
 		requestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:      "request_duration",
 			Namespace: "vshard",
-		}, []string{"procedure", "ok", "map_reduce"}), // Histogram for request durations
+		}, []string{"procedure", "ok", "map_reduce", "replicaset"}), // Histogram for request durations
 	}
 }
