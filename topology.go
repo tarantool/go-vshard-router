@@ -64,14 +64,19 @@ func (r *Router) AddInstance(ctx context.Context, rsName string, info InstanceIn
 		return err
 	}
 
-	instance := pool.Instance{
-		Name: info.Name,
-		Dialer: tarantool.NetDialer{
+	dialer := info.Dialer
+	if dialer == nil {
+		dialer = tarantool.NetDialer{
 			Address:  info.Addr,
 			User:     r.cfg.User,
 			Password: r.cfg.Password,
-		},
-		Opts: r.cfg.PoolOpts,
+		}
+	}
+
+	instance := pool.Instance{
+		Name:   info.Name,
+		Dialer: dialer,
+		Opts:   r.cfg.PoolOpts,
 	}
 
 	nameToReplicasetRef := r.getNameToReplicaset()
@@ -133,14 +138,19 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 
 	rsInstances := make([]pool.Instance, 0, len(instances))
 	for _, instance := range instances {
-		rsInstances = append(rsInstances, pool.Instance{
-			Name: instance.Name,
-			Dialer: tarantool.NetDialer{
+		dialer := instance.Dialer
+		if dialer == nil {
+			dialer = tarantool.NetDialer{
 				Address:  instance.Addr,
 				User:     r.cfg.User,
 				Password: r.cfg.Password,
-			},
-			Opts: r.cfg.PoolOpts,
+			}
+		}
+
+		rsInstances = append(rsInstances, pool.Instance{
+			Name:   instance.Name,
+			Dialer: dialer,
+			Opts:   r.cfg.PoolOpts,
 		})
 	}
 
