@@ -163,6 +163,10 @@ type InstanceInfo struct {
 	// While this information is not mandatory, it can be useful for internal management or tracking purposes.
 	// The UUID ensures that each instance can be identified uniquely, but it is not required for basic operations.
 	UUID uuid.UUID
+
+	// Dialer allows to use a custom dialer instead of the default one (tarantool.NetDialer).
+	// This parameter is temporarily optional and will become mandatory in the future.
+	Dialer tarantool.Dialer
 }
 
 func (ii InstanceInfo) String() string {
