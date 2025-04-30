@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tarantool/go-iproto"
 	"github.com/tarantool/go-tarantool/v2/pool"
 )
 
@@ -81,6 +82,22 @@ func (req *CallRequest) Args(args interface{}) *CallRequest {
 func (req *CallRequest) Context(ctx context.Context) *CallRequest {
 	req.ctx = ctx
 	return req
+}
+
+// Type returns the type of the request, which is always IProto Call.
+func (req *CallRequest) Type() iproto.Type {
+	return iproto.IPROTO_CALL
+}
+
+// Ctx returns the context associated with the request,
+// which can be used for cancellation, deadlines, etc.
+func (req *CallRequest) Ctx() context.Context {
+	return req.ctx
+}
+
+// Async returns false to the request return a response.
+func (req *CallRequest) Async() bool {
+	return false
 }
 
 // BucketID method that sets the bucketID for your request.
