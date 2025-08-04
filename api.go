@@ -328,8 +328,8 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			vshardError := storageCallResponse.VshardError
 
 			switch vshardError.Name {
-			case VShardErrNameWrongBucket, VShardErrNameBucketIsLocked:
-				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L663
+			case VShardErrNameWrongBucket, VShardErrNameBucketIsLocked, VShardErrNameTransferIsInProgress:
+				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/0.1.34/vshard/router/init.lua#L667
 				r.BucketReset(bucketID)
 
 				destination := vshardError.Destination
@@ -381,7 +381,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 					}
 				}
 
-				// retry for VShardErrNameWrongBucket, VShardErrNameBucketIsLocked
+				// retry for VShardErrNameWrongBucket, VShardErrNameBucketIsLocked, VShardErrNameTransferIsInProgress
 
 				r.metrics().RetryOnCall("bucket_migrate")
 
@@ -390,12 +390,6 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 				// this vshardError will be returned to a caller in case of timeout
 				err = vshardError
 				continue
-			case VShardErrNameTransferIsInProgress:
-				// Since lua vshard router doesn't retry here, we don't retry too.
-				// There is a comment why lua vshard router doesn't retry:
-				// https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L697
-				r.BucketReset(bucketID)
-				return VshardRouterCallResp{}, vshardError
 			case VShardErrNameNonMaster:
 				// vshard.storage has returned NON_MASTER error, lua vshard router updates info about master in this case:
 				// See: https://github.com/tarantool/vshard/blob/b6fdbe950a2e4557f05b83bd8b846b126ec3724e/vshard/router/init.lua#L704.
