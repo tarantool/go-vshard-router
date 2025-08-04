@@ -249,13 +249,13 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 		// poolMode, vshardMode = pool.PreferRO, ReadMode
 		// since go-tarantool always use balance=true politic,
 		// we can't support this case until: https://github.com/tarantool/go-tarantool/issues/400
-		return VshardRouterCallResp{}, fmt.Errorf("mode VshardCallModeRE is not supported yet")
+		return VshardRouterCallResp{}, fmt.Errorf("mode CallModeRE is not supported yet")
 	case CallModeBRO:
 		poolMode, vshardMode = pool.ANY, ReadMode
 	case CallModeBRE:
 		poolMode, vshardMode = pool.PreferRO, ReadMode
 	default:
-		return VshardRouterCallResp{}, fmt.Errorf("unknown VshardCallMode(%d)", mode)
+		return VshardRouterCallResp{}, fmt.Errorf("unknown CallMode(%d)", mode)
 	}
 
 	timeout := callTimeoutDefault
@@ -277,6 +277,9 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	requestStartTime := time.Now()
 
+	nameToReplicasetRef := r.getNameToReplicaset()
+	routerMap := r.getRouteMap()
+
 	var err error
 
 	for {
@@ -293,7 +296,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 		var rs *Replicaset
 
-		rs, err = r.Route(ctx, bucketID)
+		rs, err = r.route(ctx, nameToReplicasetRef, routerMap, bucketID)
 		if err != nil {
 			r.metrics().RetryOnCall("bucket_resolve_error")
 
@@ -330,14 +333,12 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			switch vshardError.Name {
 			case VShardErrNameWrongBucket, VShardErrNameBucketIsLocked, VShardErrNameTransferIsInProgress:
 				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/0.1.34/vshard/router/init.lua#L667
-				r.BucketReset(bucketID)
+				r.bucketReset(routerMap, bucketID)
 
 				destination := vshardError.Destination
 				if destination != "" {
 					var loggedOnce bool
 					for {
-						nameToReplicasetRef := r.getNameToReplicaset()
-
 						// In some cases destination contains UUID (prior to tnt 3.x), in some cases it contains replicaset name.
 						// So, at this point we don't know what destination is: a name or an UUID.
 						// But we need a name to access values in nameToReplicasetRef map, so let's find it out.
@@ -359,11 +360,11 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 						}
 
 						if destinationExists {
-							_, err := r.BucketSet(bucketID, destinationName)
+							_, err := r.bucketSet(nameToReplicasetRef, routerMap, bucketID, destinationName)
 							if err == nil {
 								break // breaks loop
 							}
-							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destinationName, err)
+							r.log().Warnf(ctx, "Failed set bucket %d to %v (this should not happen): %v", bucketID, destinationName, err)
 						}
 
 						if !loggedOnce {
@@ -378,6 +379,9 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 						if spent := time.Since(requestStartTime); spent > timeout {
 							return VshardRouterCallResp{}, vshardError
 						}
+
+						// update nameToReplicasetRef explicitly before next try, the topology might changed.
+						nameToReplicasetRef = r.getNameToReplicaset()
 					}
 				}
 

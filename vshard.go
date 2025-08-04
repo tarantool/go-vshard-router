@@ -238,25 +238,37 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
+	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
+		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	}
 
+	nameToReplicasetRef := r.getNameToReplicaset()
+	routeMap := r.getRouteMap()
+
+	return r.bucketSet(nameToReplicasetRef, routeMap, bucketID, rsName)
+}
+
+func (r *Router) bucketSet(nameToReplicasetRef map[string]*Replicaset, routeMap routeMap, bucketID uint64, rsName string) (*Replicaset, error) {
 	rs := nameToReplicasetRef[rsName]
 	if rs == nil {
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
 
-	routeMap := r.getRouteMap()
 	routeMap[bucketID].Store(rs)
 
 	return rs, nil
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	if bucketID > r.cfg.TotalBucketCount {
+	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
 		return
 	}
 
 	routeMap := r.getRouteMap()
+	r.bucketReset(routeMap, bucketID)
+}
+
+func (r *Router) bucketReset(routeMap routeMap, bucketID uint64) {
 	routeMap[bucketID].Store(nil)
 }
 
