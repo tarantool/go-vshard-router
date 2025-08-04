@@ -7,6 +7,7 @@ CHANGES:
 * Get rid of nameToReplicasetMutex, use atomic instead.
 * Add configurable pause before retrying r.Route in Router.Call method.
 * Add ability to set custom dialer in InstaceInfo.
+* Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
 
 ## v2.0.5
 
