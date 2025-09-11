@@ -65,6 +65,12 @@ replicasets = {'cbf06940-0790-498b-948d-042b62cf3d29',
 
 rawset(_G, 'vshard', vshard) -- set as global variable
 
+box.cfg{}
+
+box.once('access:v1', function()
+    box.schema.user.grant('guest', 'read,write,execute', 'universe')
+end)
+
 -- Если мы являемся роутером, то применяем другой конфиг
 if NAME == "router" then
     cfg.listen = "0.0.0.0:12000"
@@ -90,8 +96,6 @@ if NAME == "router" then
         return router:call(bucket_id, 'read', 'product_get', {req})
     end
 else
-    vshard.storage.cfg(cfg, names[NAME])
-
     -- everything below is copypasted from storage.lua in vshard example:
     -- https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/example/storage.lua
     box.once("testapp:schema:1", function()
@@ -227,8 +231,6 @@ else
             id = product.id:str()
         }
     end
-end
 
-box.once('access:v1', function()
-    box.schema.user.grant('guest', 'read,write,execute', 'universe')
-end)
+    vshard.storage.cfg(cfg, names[NAME])
+end
