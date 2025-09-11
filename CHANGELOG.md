@@ -9,6 +9,9 @@ CHANGES:
 * Add ability to set custom dialer in InstaceInfo.
 * Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
 
+BUG FIXES:
+* Router.bucketSearchBatched: do not flush out routeMap (#79).
+
 ## v2.0.5
 
 The go-vshard team apologizes for changing the interfaces to experimental status.

@@ -169,7 +169,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 				rs = rsFuture.rs
 			}
 
-			routeMap[bucketID].Store(rs)
+			routeMap[bucketID].Store(rsFuture.rs)
 		}
 
 		if bucketIDWasFound := rs != nil; !bucketIDWasFound {
