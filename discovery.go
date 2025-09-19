@@ -52,21 +52,26 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 	}
 
 	routeMap := r.getRouteMap()
+	nameToReplicasetRef := r.getNameToReplicaset()
+
+	return r.route(ctx, nameToReplicasetRef, routeMap, bucketID)
+}
+
+func (r *Router) route(ctx context.Context, nameToReplicasetRef map[string]*Replicaset,
+	routeMap routeMap, bucketID uint64) (*Replicaset, error) {
 
 	rs := routeMap[bucketID].Load()
 	if rs != nil {
-		nameToReplicasetRef := r.getNameToReplicaset()
-
 		actualRs := nameToReplicasetRef[rs.info.Name]
 		switch {
 		case actualRs == nil:
 			// rs is outdated, can't use it -- let's discover bucket again
-			r.BucketReset(bucketID)
+			r.bucketReset(routeMap, bucketID)
 		case actualRs == rs:
 			return rs, nil
 		default: // actualRs != rs
 			// update rs -> actualRs for this bucket
-			_, _ = r.BucketSet(bucketID, actualRs.info.Name)
+			_, _ = r.bucketSet(nameToReplicasetRef, routeMap, bucketID, actualRs.info.Name)
 			return actualRs, nil
 		}
 	}
@@ -75,14 +80,14 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 	r.log().Infof(ctx, "Discovering bucket %d", bucketID)
 
 	if r.cfg.BucketsSearchMode == BucketsSearchLegacy {
-		return r.bucketSearchLegacy(ctx, bucketID)
+		return r.bucketSearchLegacy(ctx, nameToReplicasetRef, routeMap, bucketID)
 	}
 
-	return r.bucketSearchBatched(ctx, bucketID)
+	return r.bucketSearchBatched(ctx, nameToReplicasetRef, routeMap, bucketID)
 }
 
-func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
+func (r *Router) bucketSearchLegacy(ctx context.Context,
+	nameToReplicasetRef map[string]*Replicaset, routeMap routeMap, bucketID uint64) (*Replicaset, error) {
 
 	type rsFuture struct {
 		rsName string
@@ -109,7 +114,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 		}
 
 		// It's ok if several replicasets return ok to bucket_stat command for the same bucketID, just pick any of them.
-		rs, err := r.BucketSet(bucketID, rsFuture.rsName)
+		rs, err := r.bucketSet(nameToReplicasetRef, routeMap, bucketID, rsFuture.rsName)
 		if err != nil {
 			r.log().Errorf(ctx, "bucketSearchLegacy: can't set rsID %v for bucketID %d: %v", rsFuture.rsName, bucketID, err)
 			return nil, newVShardErrorNoRouteToBucket(bucketID)
@@ -133,9 +138,8 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 // P.S. 1000 is a batch size in response of buckets_discovery, see:
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/storage/init.lua#L1700
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/consts.lua#L37
-func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
-	routeMap := r.getRouteMap()
+func (r *Router) bucketSearchBatched(ctx context.Context,
+	nameToReplicasetRef map[string]*Replicaset, routeMap routeMap, bucketIDToFind uint64) (*Replicaset, error) {
 
 	type rsFuture struct {
 		rs     *Replicaset

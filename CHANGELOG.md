@@ -8,6 +8,7 @@ CHANGES:
 * Add configurable pause before retrying r.Route in Router.Call method.
 * Add ability to set custom dialer in InstaceInfo.
 * Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
+* Work with the same routeMap and nameToReplicasetRef within one method (resolve issue #14).
 
 BUG FIXES:
 * Router.bucketSearchBatched: do not flush out routeMap (#79).
