@@ -3,14 +3,16 @@ package vshard_router //nolint:revive
 import (
 	"context"
 	"fmt"
+	"hash/crc32"
+	"math"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/google/uuid"
-	"github.com/snksoft/crc"
 	"github.com/vmihailenco/msgpack/v5"
 
-	tarantool "github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v2"
 )
 
 var (
@@ -319,17 +321,16 @@ func validateCfg(cfg Config) error {
 // -- Other
 // --------------------------------------------------------------------------------
 
-var h = crc.NewHash(&crc.Parameters{
-	Width:      32,
-	Polynomial: 0x1EDC6F41,
-	FinalXor:   0x0,
-	ReflectIn:  true,
-	ReflectOut: true,
-	Init:       0xFFFFFFFF,
-})
+var crcTable = crc32.MakeTable(crc32.Castagnoli)
 
 func BucketIDStrCRC32(shardKey string, totalBucketCount uint64) uint64 {
-	return h.CalculateCRC([]byte(shardKey))%totalBucketCount + 1
+	bytesKey := unsafe.Slice(
+		unsafe.StringData(shardKey),
+		len(shardKey),
+	)
+	crc := crc32.Checksum(bytesKey, crcTable) ^ math.MaxUint32
+
+	return uint64(crc)%totalBucketCount + 1
 }
 
 // BucketIDStrCRC32 return the bucket identifier from the parameter used for sharding.
