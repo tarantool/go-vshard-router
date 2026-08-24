@@ -24,7 +24,24 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
-type routeMap = []atomic.Pointer[Replicaset]
+type routeMap []atomic.Pointer[Replicaset]
+type nameToReplicasetMap map[string]*Replicaset
+
+func (m routeMap) get(bucketID uint64) *Replicaset {
+	return m[bucketID].Load()
+}
+
+func (m routeMap) set(bucketID uint64, rs *Replicaset) {
+	m[bucketID].Store(rs)
+}
+
+func (m routeMap) reset(bucketID uint64) {
+	m[bucketID].Store(nil)
+}
+
+func (m routeMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
+	return m[bucketID].Swap(rs)
+}
 
 type Router struct {
 	cfg Config
@@ -35,7 +52,7 @@ type Router struct {
 	// Assuming that we rarely add or remove some replicaset,
 	// it should be the simplest and most efficient way of handling concurrent access.
 	// Additionally, we can safely iterate over a map because it never changes.
-	nameToReplicaset atomic.Pointer[map[string]*Replicaset]
+	nameToReplicaset atomic.Pointer[nameToReplicasetMap]
 
 	routeMap atomic.Pointer[routeMap]
 
@@ -246,7 +263,7 @@ func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) 
 	}
 
 	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(rs)
+	routeMap.set(bucketID, rs)
 
 	return rs, nil
 }
@@ -257,7 +274,7 @@ func (r *Router) BucketReset(bucketID uint64) {
 	}
 
 	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(nil)
+	routeMap.reset(bucketID)
 }
 
 func (r *Router) RouteMapClean() {
@@ -265,8 +282,8 @@ func (r *Router) RouteMapClean() {
 }
 
 func (r *Router) setEmptyRouteMap() {
-	routeMap := make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
-	r.setRouteMap(routeMap)
+	emptyRouteMap := make(routeMap, r.cfg.TotalBucketCount+1)
+	r.setRouteMap(emptyRouteMap)
 }
 
 func prepareCfg(ctx context.Context, cfg Config) (Config, error) {

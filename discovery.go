@@ -53,7 +53,7 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 
 	routeMap := r.getRouteMap()
 
-	rs := routeMap[bucketID].Load()
+	rs := routeMap.get(bucketID)
 	if rs != nil {
 		nameToReplicasetRef := r.getNameToReplicaset()
 
@@ -169,7 +169,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 				rs = rsFuture.rs
 			}
 
-			routeMap[bucketID].Store(rsFuture.rs)
+			routeMap.set(bucketID, rsFuture.rs)
 		}
 
 		if bucketIDWasFound := rs != nil; !bucketIDWasFound {
@@ -207,7 +207,7 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 		// 	continue
 		// }
 
-		oldRs := routeMap[bucketID].Swap(rs)
+		oldRs := routeMap.swap(bucketID, rs)
 
 		var oldRsName string
 		if oldRs != nil {
@@ -271,7 +271,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 						continue
 					}
 
-					routeMap[bucketID].Store(rs)
+					routeMap.set(bucketID, rs)
 				}
 
 				// There are no more buckets
