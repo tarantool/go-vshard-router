@@ -27,6 +27,10 @@ var (
 type routeMap []atomic.Pointer[Replicaset]
 type nameToReplicasetMap map[string]*Replicaset
 
+func (m routeMap) isBucketIDValid(bucketID uint64) bool {
+	return bucketID >= 1 && bucketID < uint64(len(m))
+}
+
 func (m routeMap) get(bucketID uint64) *Replicaset {
 	return m[bucketID].Load()
 }
@@ -41,6 +45,13 @@ func (m routeMap) reset(bucketID uint64) {
 
 func (m routeMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
 	return m[bucketID].Swap(rs)
+}
+
+func (m routeMap) totalBucketCount() uint64 {
+	if len(m) == 0 {
+		return 0
+	}
+	return uint64(len(m)) - 1
 }
 
 type Router struct {
@@ -84,6 +95,14 @@ func (r *Router) view() routerView {
 		replicasets: r.getNameToReplicaset(),
 		routes:      r.getRouteMap(),
 	}
+}
+
+func (v routerView) validateBucketID(bucketID uint64) error {
+	if !v.routes.isBucketIDValid(bucketID) {
+		return fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, v.routes.totalBucketCount())
+	}
+
+	return nil
 }
 
 func (r *Router) metrics() MetricsProvider {
@@ -278,7 +297,13 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
-	return r.view().bucketSet(bucketID, rsName)
+	view := r.view()
+
+	if err := view.validateBucketID(bucketID); err != nil {
+		return nil, err
+	}
+
+	return view.bucketSet(bucketID, rsName)
 }
 
 func (v routerView) bucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
@@ -293,11 +318,12 @@ func (v routerView) bucketSet(bucketID uint64, rsName string) (*Replicaset, erro
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	if bucketID > r.cfg.TotalBucketCount {
+	view := r.view()
+
+	if err := view.validateBucketID(bucketID); err != nil {
 		return
 	}
-
-	r.view().bucketReset(bucketID)
+	view.bucketReset(bucketID)
 }
 
 func (v routerView) bucketReset(bucketID uint64) {

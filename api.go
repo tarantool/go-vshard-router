@@ -253,8 +253,8 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
 	const vshardStorageClientCall = "vshard.storage.call"
 
-	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		return VshardRouterCallResp{}, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	if err := r.view().validateBucketID(bucketID); err != nil {
+		return VshardRouterCallResp{}, err
 	}
 
 	var poolMode pool.Mode

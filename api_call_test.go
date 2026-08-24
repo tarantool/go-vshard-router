@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -239,6 +240,38 @@ func TestRouter_Call_WrongBucketWithoutDestination(t *testing.T) {
 	result, err := resp.Get()
 	require.NoError(t, err)
 	require.Equal(t, []any{"done"}, result)
+
+	require.Same(t, nameToRs["rs_1"], r.getRouteMap().get(bucketID))
+}
+
+func TestRouter_Call_DiscoveryIgnoresOutOfRangeBucket(t *testing.T) {
+	t.Parallel()
+
+	const bucketID = uint64(1)
+
+	r, nameToRs := testRouter(testRouterUpperBound, "rs_1")
+	r.cfg.BucketsSearchMode = BucketsSearchBatchedQuick
+
+	outOfRange := []uint64{0, bucketID, testRouterUpperBound + 1, math.MaxUint64}
+
+	nameToRs["rs_1"].conn = storagePooler(t, outOfRange, func(callNo int) any {
+		if callNo == 0 {
+			return vshardErrorResp(VShardErrNameWrongBucket, "")
+		}
+
+		return okResp("done")
+	})
+
+	r.getRouteMap().set(bucketID, nameToRs["rs_1"])
+
+	require.NotPanics(t, func() {
+		resp, err := r.Call(context.Background(), bucketID, CallModeRW, "echo", nil, CallOpts{Timeout: time.Second})
+		require.NoError(t, err)
+
+		result, err := resp.Get()
+		require.NoError(t, err)
+		require.Equal(t, []any{"done"}, result)
+	})
 
 	require.Same(t, nameToRs["rs_1"], r.getRouteMap().get(bucketID))
 }
