@@ -47,11 +47,13 @@ const (
 
 // Route get replicaset object by bucket identifier.
 func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	view := r.view()
+
+	if err := view.validateBucketID(bucketID); err != nil {
+		return nil, err
 	}
 
-	return r.view().route(ctx, bucketID)
+	return view.route(ctx, bucketID)
 }
 
 func (v routerView) route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
@@ -159,6 +161,12 @@ func (v routerView) bucketSearchBatched(ctx context.Context, bucketIDToFind uint
 		}
 
 		for _, bucketID := range resp.Buckets {
+			if !v.routes.isBucketIDValid(bucketID) {
+				v.r.log().Errorf(ctx, "bucketSearchBatched: ignoring bucketID out of range: %d (total %d)",
+					bucketID, v.routes.totalBucketCount())
+				continue
+			}
+
 			if bucketID == bucketIDToFind {
 				// We found where bucketIDToFind is located
 				rs = rsFuture.rs
@@ -259,9 +267,9 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 				}
 
 				for _, bucketID := range resp.Buckets {
-					if bucketID > r.cfg.TotalBucketCount {
-						r.log().Errorf(ctx, "Ignoring got bucketID is out of range: %d (length %d)",
-							bucketID, r.cfg.TotalBucketCount)
+					if !view.routes.isBucketIDValid(bucketID) {
+						r.log().Errorf(ctx, "Ignoring got bucketID is out of range: %d (total %d)",
+							bucketID, view.routes.totalBucketCount())
 						continue
 					}
 

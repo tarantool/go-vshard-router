@@ -10,6 +10,8 @@ CHANGES:
 * Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
 * Bump dependencies, except etcd.
 * Work with the same routeMap and nameToReplicasetRef within one method (resolve issue #14).
+* Router.BucketSet now validates bucket id and returns an error instead of panicking
+  or silently writing outside of the configured range.
 
 BUG FIXES:
 * Router.bucketSearchBatched: do not flush out routeMap (#79).
