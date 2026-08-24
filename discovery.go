@@ -47,51 +47,51 @@ const (
 
 // Route get replicaset object by bucket identifier.
 func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	view := r.view()
+
+	if err := view.validateBucketID(bucketID); err != nil {
+		return nil, err
 	}
 
-	routeMap := r.getRouteMap()
+	return view.route(ctx, bucketID)
+}
 
-	rs := routeMap[bucketID].Load()
+func (v routerView) route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
+	rs := v.routes.get(bucketID)
 	if rs != nil {
-		nameToReplicasetRef := r.getNameToReplicaset()
-
-		actualRs := nameToReplicasetRef[rs.info.Name]
+		actualRs := v.replicasets[rs.info.Name]
 		switch {
 		case actualRs == nil:
 			// rs is outdated, can't use it -- let's discover bucket again
-			r.BucketReset(bucketID)
+			v.bucketReset(bucketID)
 		case actualRs == rs:
 			return rs, nil
 		default: // actualRs != rs
 			// update rs -> actualRs for this bucket
-			_, _ = r.BucketSet(bucketID, actualRs.info.Name)
+			_, _ = v.bucketSet(bucketID, actualRs.info.Name)
 			return actualRs, nil
 		}
 	}
 
 	// it`s ok if in the same time we have few active searches
-	r.log().Infof(ctx, "Discovering bucket %d", bucketID)
+	v.r.log().Infof(ctx, "Discovering bucket %d", bucketID)
 
-	if r.cfg.BucketsSearchMode == BucketsSearchLegacy {
-		return r.bucketSearchLegacy(ctx, bucketID)
+	if v.r.cfg.BucketsSearchMode == BucketsSearchLegacy {
+		return v.bucketSearchLegacy(ctx, bucketID)
 	}
 
-	return r.bucketSearchBatched(ctx, bucketID)
+	return v.bucketSearchBatched(ctx, bucketID)
 }
 
-func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
-
+func (v routerView) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Replicaset, error) {
 	type rsFuture struct {
 		rsName string
 		future *tarantool.Future
 	}
 
-	var rsFutures = make([]rsFuture, 0, len(nameToReplicasetRef))
+	var rsFutures = make([]rsFuture, 0, len(v.replicasets))
 	// Send a bunch of parallel requests
-	for rsName, rs := range nameToReplicasetRef {
+	for rsName, rs := range v.replicasets {
 		rsFutures = append(rsFutures, rsFuture{
 			rsName: rsName,
 			future: rs.bucketStatAsync(ctx, bucketID),
@@ -102,16 +102,16 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 		if _, err := bucketStatWait(rsFuture.future); err != nil {
 			var vshardError StorageCallVShardError
 			if !errors.As(err, &vshardError) {
-				r.log().Errorf(ctx, "bucketSearchLegacy: bucketStatWait call error for %v: %v", rsFuture.rsName, err)
+				v.r.log().Errorf(ctx, "bucketSearchLegacy: bucketStatWait call error for %v: %v", rsFuture.rsName, err)
 			}
 			// just skip, bucket may not belong to this replicaset
 			continue
 		}
 
 		// It's ok if several replicasets return ok to bucket_stat command for the same bucketID, just pick any of them.
-		rs, err := r.BucketSet(bucketID, rsFuture.rsName)
+		rs, err := v.bucketSet(bucketID, rsFuture.rsName)
 		if err != nil {
-			r.log().Errorf(ctx, "bucketSearchLegacy: can't set rsID %v for bucketID %d: %v", rsFuture.rsName, bucketID, err)
+			v.r.log().Errorf(ctx, "bucketSearchLegacy: can't set rsID %v for bucketID %d: %v", rsFuture.rsName, bucketID, err)
 			return nil, newVShardErrorNoRouteToBucket(bucketID)
 		}
 
@@ -133,19 +133,16 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 // P.S. 1000 is a batch size in response of buckets_discovery, see:
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/storage/init.lua#L1700
 // https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/consts.lua#L37
-func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
-	routeMap := r.getRouteMap()
-
+func (v routerView) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
 	type rsFuture struct {
 		rs     *Replicaset
 		rsName string
 		future *tarantool.Future
 	}
 
-	var rsFutures = make([]rsFuture, 0, len(nameToReplicasetRef))
+	var rsFutures = make([]rsFuture, 0, len(v.replicasets))
 	// Send a bunch of parallel requests
-	for rsName, rs := range nameToReplicasetRef {
+	for rsName, rs := range v.replicasets {
 		rsFutures = append(rsFutures, rsFuture{
 			rs:     rs,
 			rsName: rsName,
@@ -158,25 +155,31 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 	for _, rsFuture := range rsFutures {
 		resp, err := bucketsDiscoveryWait(rsFuture.future)
 		if err != nil {
-			r.log().Errorf(ctx, "bucketSearchBatched: bucketsDiscoveryWait error for %v: %v", rsFuture.rsName, err)
+			v.r.log().Errorf(ctx, "bucketSearchBatched: bucketsDiscoveryWait error for %v: %v", rsFuture.rsName, err)
 			// just skip, we still may find our bucket in another replicaset
 			continue
 		}
 
 		for _, bucketID := range resp.Buckets {
+			if !v.routes.isBucketIDValid(bucketID) {
+				v.r.log().Errorf(ctx, "bucketSearchBatched: ignoring bucketID out of range: %d (total %d)",
+					bucketID, v.routes.totalBucketCount())
+				continue
+			}
+
 			if bucketID == bucketIDToFind {
 				// We found where bucketIDToFind is located
 				rs = rsFuture.rs
 			}
 
-			routeMap[bucketID].Store(rsFuture.rs)
+			v.routes.set(bucketID, rsFuture.rs)
 		}
 
 		if bucketIDWasFound := rs != nil; !bucketIDWasFound {
 			continue
 		}
 
-		if r.cfg.BucketsSearchMode == BucketsSearchBatchedQuick {
+		if v.r.cfg.BucketsSearchMode == BucketsSearchBatchedQuick {
 			return rs, nil
 		}
 	}
@@ -190,7 +193,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 
 // DiscoveryHandleBuckets arrange downloaded buckets to the route map so as they reference a given replicaset.
 func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buckets []uint64) {
-	routeMap := r.getRouteMap()
+	view := r.view()
 	removedFrom := make(map[string]int)
 
 	var newRsName string
@@ -207,7 +210,7 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 		// 	continue
 		// }
 
-		oldRs := routeMap[bucketID].Swap(rs)
+		oldRs := view.routes.swap(bucketID, rs)
 
 		var oldRsName string
 		if oldRs != nil {
@@ -248,10 +251,9 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 
 	var errGr errgroup.Group
 
-	routeMap := r.getRouteMap()
-	nameToReplicasetRef := r.getNameToReplicaset()
+	view := r.view()
 
-	for _, rs := range nameToReplicasetRef {
+	for _, rs := range view.replicasets {
 		rs := rs
 
 		errGr.Go(func() error {
@@ -265,13 +267,13 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 				}
 
 				for _, bucketID := range resp.Buckets {
-					if bucketID > r.cfg.TotalBucketCount {
-						r.log().Errorf(ctx, "Ignoring got bucketID is out of range: %d (length %d)",
-							bucketID, r.cfg.TotalBucketCount)
+					if !view.routes.isBucketIDValid(bucketID) {
+						r.log().Errorf(ctx, "Ignoring got bucketID is out of range: %d (total %d)",
+							bucketID, view.routes.totalBucketCount())
 						continue
 					}
 
-					routeMap[bucketID].Store(rs)
+					view.routes.set(bucketID, rs)
 				}
 
 				// There are no more buckets

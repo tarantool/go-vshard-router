@@ -24,7 +24,35 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
-type routeMap = []atomic.Pointer[Replicaset]
+type routeMap []atomic.Pointer[Replicaset]
+type nameToReplicasetMap map[string]*Replicaset
+
+func (m routeMap) isBucketIDValid(bucketID uint64) bool {
+	return bucketID >= 1 && bucketID < uint64(len(m))
+}
+
+func (m routeMap) get(bucketID uint64) *Replicaset {
+	return m[bucketID].Load()
+}
+
+func (m routeMap) set(bucketID uint64, rs *Replicaset) {
+	m[bucketID].Store(rs)
+}
+
+func (m routeMap) reset(bucketID uint64) {
+	m[bucketID].Store(nil)
+}
+
+func (m routeMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
+	return m[bucketID].Swap(rs)
+}
+
+func (m routeMap) totalBucketCount() uint64 {
+	if len(m) == 0 {
+		return 0
+	}
+	return uint64(len(m)) - 1
+}
 
 type Router struct {
 	cfg Config
@@ -35,7 +63,7 @@ type Router struct {
 	// Assuming that we rarely add or remove some replicaset,
 	// it should be the simplest and most efficient way of handling concurrent access.
 	// Additionally, we can safely iterate over a map because it never changes.
-	nameToReplicaset atomic.Pointer[map[string]*Replicaset]
+	nameToReplicaset atomic.Pointer[nameToReplicasetMap]
 
 	routeMap atomic.Pointer[routeMap]
 
@@ -44,6 +72,37 @@ type Router struct {
 	refID atomic.Int64
 
 	cancelDiscovery func()
+}
+
+// routerView is a consistent snapshot of the router state: the
+// replicaset map and the route map are taken together, so everything
+// within one method call sees the same generation of both. A view is
+// cheap to copy and should not outlive the call that created it.
+type routerView struct {
+	r *Router
+	// replicasets is never modified in place: topology changes publish
+	// a new map, so this view never sees them.
+	replicasets nameToReplicasetMap
+	// routes elements are atomic pointers shared with every holder of
+	// this map; after RouteMapClean this map is detached and writes to
+	// it are lost.
+	routes routeMap
+}
+
+func (r *Router) view() routerView {
+	return routerView{
+		r:           r,
+		replicasets: r.getNameToReplicaset(),
+		routes:      r.getRouteMap(),
+	}
+}
+
+func (v routerView) validateBucketID(bucketID uint64) error {
+	if !v.routes.isBucketIDValid(bucketID) {
+		return fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, v.routes.totalBucketCount())
+	}
+
+	return nil
 }
 
 func (r *Router) metrics() MetricsProvider {
@@ -238,26 +297,37 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
+	view := r.view()
 
-	rs := nameToReplicasetRef[rsName]
+	if err := view.validateBucketID(bucketID); err != nil {
+		return nil, err
+	}
+
+	return view.bucketSet(bucketID, rsName)
+}
+
+func (v routerView) bucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
+	rs := v.replicasets[rsName]
 	if rs == nil {
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
 
-	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(rs)
+	v.routes.set(bucketID, rs)
 
 	return rs, nil
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	if bucketID > r.cfg.TotalBucketCount {
+	view := r.view()
+
+	if err := view.validateBucketID(bucketID); err != nil {
 		return
 	}
+	view.bucketReset(bucketID)
+}
 
-	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(nil)
+func (v routerView) bucketReset(bucketID uint64) {
+	v.routes.reset(bucketID)
 }
 
 func (r *Router) RouteMapClean() {
@@ -265,8 +335,8 @@ func (r *Router) RouteMapClean() {
 }
 
 func (r *Router) setEmptyRouteMap() {
-	routeMap := make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
-	r.setRouteMap(routeMap)
+	emptyRouteMap := make(routeMap, r.cfg.TotalBucketCount+1)
+	r.setRouteMap(emptyRouteMap)
 }
 
 func prepareCfg(ctx context.Context, cfg Config) (Config, error) {
@@ -357,12 +427,12 @@ func (r *Router) BucketCount() uint64 {
 // succeeds fully or fails fast.
 // Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
-	nameToReplicasetRef := r.getNameToReplicaset()
+	view := r.view()
 
-	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
+	rssToBootstrap := make([]Replicaset, 0, len(view.replicasets))
 	var lastErr error
 
-	for _, rs := range nameToReplicasetRef {
+	for _, rs := range view.replicasets {
 		rssToBootstrap = append(rssToBootstrap, *rs)
 	}
 

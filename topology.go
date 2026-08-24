@@ -3,6 +3,7 @@ package vshard_router //nolint:revive
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/tarantool/go-tarantool/v2"
 	"github.com/tarantool/go-tarantool/v2/pool"
@@ -27,27 +28,25 @@ type TopologyController interface {
 	AddReplicasets(ctx context.Context, replicasets map[ReplicasetInfo][]InstanceInfo) error
 }
 
-func copyMap[K comparable, V any](m map[K]V) map[K]V {
-	copy := make(map[K]V)
-	for k, v := range m {
-		copy[k] = v
-	}
-	return copy
+func copyMap[M ~map[K]V, K comparable, V any](m M) M {
+	copied := make(M, len(m))
+	maps.Copy(copied, m)
+	return copied
 }
 
 func (r *Router) setEmptyNameToReplicaset() {
-	var nameToReplicasetRef map[string]*Replicaset
+	var nameToReplicasetRef nameToReplicasetMap
 	_ = r.swapNameToReplicaset(nil, &nameToReplicasetRef)
 }
 
-func (r *Router) swapNameToReplicaset(old, new *map[string]*Replicaset) error {
+func (r *Router) swapNameToReplicaset(old, new *nameToReplicasetMap) error {
 	if swapped := r.nameToReplicaset.CompareAndSwap(old, new); !swapped {
 		return ErrConcurrentTopologyChangeDetected
 	}
 	return nil
 }
 
-func (r *Router) getNameToReplicaset() map[string]*Replicaset {
+func (r *Router) getNameToReplicaset() nameToReplicasetMap {
 	ptr := r.nameToReplicaset.Load()
 	return *ptr
 }
@@ -171,7 +170,7 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 
 	switch isConnected, err := conn.ConnectedNow(pool.RW); {
 	case err != nil:
-		r.log().Errorf(ctx, "cant check rs pool conntected rw now with error: %v", err)
+		r.log().Errorf(ctx, "cant check rs pool connected rw now with error: %v", err)
 	case !isConnected:
 		r.log().Errorf(ctx, "got connected now as false to pool.RW")
 	}

@@ -228,13 +228,33 @@ func (r VshardRouterCallResp) GetTyped(result interface{}) error {
 	return msgpack.Unmarshal(r.buf.Bytes(), result)
 }
 
+// In some cases destination contains UUID (prior to tnt 3.x), in some
+// cases it contains replicaset name. So, at this point we don't know
+// what destination is: a name or an UUID. But we need a name to access
+// values in nameToReplicasetMap, so let's find it out.
+func (v routerView) resolveReplicasetName(destination string) (string, bool) {
+	_, destinationExists := v.replicasets[destination]
+	if destinationExists {
+		return destination, true
+	}
+	// for older logic with uuid we must support backward compatibility
+	// if destination is uuid and not name, lets find it too.
+	for rsName, rs := range v.replicasets {
+		if rs.info.UUID.String() == destination {
+			return rsName, true
+		}
+	}
+
+	return "", false
+}
+
 // Call calls the function identified by 'fnc' on the shard storing the bucket identified by 'bucket_id'.
 func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
 	const vshardStorageClientCall = "vshard.storage.call"
 
-	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		return VshardRouterCallResp{}, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	if err := r.view().validateBucketID(bucketID); err != nil {
+		return VshardRouterCallResp{}, err
 	}
 
 	var poolMode pool.Mode
@@ -249,13 +269,13 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 		// poolMode, vshardMode = pool.PreferRO, ReadMode
 		// since go-tarantool always use balance=true politic,
 		// we can't support this case until: https://github.com/tarantool/go-tarantool/issues/400
-		return VshardRouterCallResp{}, fmt.Errorf("mode VshardCallModeRE is not supported yet")
+		return VshardRouterCallResp{}, fmt.Errorf("mode CallModeRE is not supported yet")
 	case CallModeBRO:
 		poolMode, vshardMode = pool.ANY, ReadMode
 	case CallModeBRE:
 		poolMode, vshardMode = pool.PreferRO, ReadMode
 	default:
-		return VshardRouterCallResp{}, fmt.Errorf("unknown VshardCallMode(%d)", mode)
+		return VshardRouterCallResp{}, fmt.Errorf("unknown CallMode(%d)", mode)
 	}
 
 	timeout := callTimeoutDefault
@@ -292,8 +312,9 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 		}
 
 		var rs *Replicaset
+		view := r.view()
 
-		rs, err = r.Route(ctx, bucketID)
+		rs, err = view.route(ctx, bucketID)
 		if err != nil {
 			r.metrics().RetryOnCall("bucket_resolve_error")
 
@@ -330,45 +351,21 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			switch vshardError.Name {
 			case VShardErrNameWrongBucket, VShardErrNameBucketIsLocked, VShardErrNameTransferIsInProgress:
 				// We reproduce here behavior in https://github.com/tarantool/vshard/blob/0.1.34/vshard/router/init.lua#L667
-				r.BucketReset(bucketID)
+				view.bucketReset(bucketID)
 
 				destination := vshardError.Destination
 				if destination != "" {
 					var loggedOnce bool
 					for {
-						nameToReplicasetRef := r.getNameToReplicaset()
-
-						// In some cases destination contains UUID (prior to tnt 3.x), in some cases it contains replicaset name.
-						// So, at this point we don't know what destination is: a name or an UUID.
-						// But we need a name to access values in nameToReplicasetRef map, so let's find it out.
-						var destinationName string
-
-						_, destinationExists := nameToReplicasetRef[destination]
-						if destinationExists {
-							destinationName = destination
-						} else {
-							// for older logic with uuid we must support backward compatibility
-							// if destination is uuid and not name, lets find it too
-							for rsName, rs := range nameToReplicasetRef {
-								if rs.info.UUID.String() == destination {
-									destinationExists = true
-									destinationName = rsName
-									break
-								}
-							}
-						}
-
-						if destinationExists {
-							_, err := r.BucketSet(bucketID, destinationName)
+						if destinationName, ok := view.resolveReplicasetName(destination); ok {
+							_, err := view.bucketSet(bucketID, destinationName)
 							if err == nil {
 								break // breaks loop
 							}
-							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destinationName, err)
-						}
-
-						if !loggedOnce {
+							r.log().Errorf(ctx, "Failed set bucket %d to %v (this should not happen): %v", bucketID, destinationName, err)
+						} else if !loggedOnce {
 							r.log().Warnf(ctx, "Replicaset '%v' was not found, but received from storage as destination - please "+
-								"update configuration", destinationName)
+								"update configuration", destination)
 							loggedOnce = true
 						}
 
@@ -378,6 +375,9 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 						if spent := time.Since(requestStartTime); spent > timeout {
 							return VshardRouterCallResp{}, vshardError
 						}
+
+						// update the view explicitly before next try, the topology might changed.
+						view = r.view()
 					}
 				}
 
@@ -587,14 +587,14 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	timeStart := time.Now()
 	refID := r.refID.Add(1)
 
-	nameToReplicasetRef := r.getNameToReplicaset()
+	view := r.view()
 
 	defer func() {
 		// call function "storage_unref" if map_callrw is failed or successed
 		storageUnrefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
 			Args([]interface{}{"storage_unref", refID})
 
-		for _, rs := range nameToReplicasetRef {
+		for _, rs := range view.replicasets {
 			future := rs.conn.Do(storageUnrefReq, pool.RW)
 			future.SetError(nil) // TODO: does it cancel the request above or not?
 		}
@@ -609,10 +609,10 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 		Context(ctx).
 		Args([]interface{}{"storage_ref", refID, timeout})
 
-	var rsFutures = make([]replicasetFuture, 0, len(nameToReplicasetRef))
+	var rsFutures = make([]replicasetFuture, 0, len(view.replicasets))
 
 	// ref stage: send concurrent ref requests
-	for name, rs := range nameToReplicasetRef {
+	for name, rs := range view.replicasets {
 		rsFutures = append(rsFutures, replicasetFuture{
 			name:   name,
 			future: rs.conn.Do(storageRefReq, pool.RW),
@@ -651,7 +651,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	rsFutures = rsFutures[0:0]
 
 	// map stage: send concurrent map requests
-	for name, rs := range nameToReplicasetRef {
+	for name, rs := range view.replicasets {
 		rsFutures = append(rsFutures, replicasetFuture{
 			name:   name,
 			future: rs.conn.Do(storageMapReq, pool.RW),
