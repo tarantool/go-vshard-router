@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
@@ -260,4 +261,64 @@ func BenchmarkVshardStorageCallResponseProto_DecodeMsgpack_Ok(b *testing.B) {
 
 	require.True(b, errCount == 0)
 	b.ReportAllocs()
+}
+
+func TestResolveReplicasetName(t *testing.T) {
+	rsUUID := uuid.New()
+
+	tests := []struct {
+		name                string
+		replicasets         nameToReplicasetMap
+		destination         string
+		notOk               bool
+		expectedDestination string
+	}{
+		{
+			name: "destination is replicaset name",
+			replicasets: nameToReplicasetMap{
+				"rs1": &Replicaset{},
+			},
+			destination:         "rs1",
+			expectedDestination: "rs1",
+		},
+		{
+			name: "destination is uuid",
+			replicasets: nameToReplicasetMap{
+				"rs1": &Replicaset{
+					info: ReplicasetInfo{
+						UUID: rsUUID,
+					},
+				},
+			},
+			destination:         rsUUID.String(),
+			expectedDestination: "rs1",
+		},
+		{
+			name: "destination not found",
+			replicasets: nameToReplicasetMap{
+				"rs1": &Replicaset{
+					info: ReplicasetInfo{
+						UUID: uuid.New(),
+					},
+				},
+			},
+			destination: "unknown",
+			notOk:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			view := routerView{replicasets: tt.replicasets}
+
+			destinationName, ok := view.resolveReplicasetName(tt.destination)
+			if tt.notOk {
+				require.False(t, ok)
+				require.Empty(t, destinationName)
+			} else {
+				require.True(t, ok)
+				require.Equal(t, tt.expectedDestination, destinationName)
+			}
+		})
+	}
 }

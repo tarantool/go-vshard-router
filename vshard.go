@@ -63,6 +63,29 @@ type Router struct {
 	cancelDiscovery func()
 }
 
+// routerView is a consistent snapshot of the router state: the
+// replicaset map and the route map are taken together, so everything
+// within one method call sees the same generation of both. A view is
+// cheap to copy and should not outlive the call that created it.
+type routerView struct {
+	r *Router
+	// replicasets is never modified in place: topology changes publish
+	// a new map, so this view never sees them.
+	replicasets nameToReplicasetMap
+	// routes elements are atomic pointers shared with every holder of
+	// this map; after RouteMapClean this map is detached and writes to
+	// it are lost.
+	routes routeMap
+}
+
+func (r *Router) view() routerView {
+	return routerView{
+		r:           r,
+		replicasets: r.getNameToReplicaset(),
+		routes:      r.getRouteMap(),
+	}
+}
+
 func (r *Router) metrics() MetricsProvider {
 	return r.cfg.Metrics
 }
@@ -255,15 +278,16 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
-	nameToReplicasetRef := r.getNameToReplicaset()
+	return r.view().bucketSet(bucketID, rsName)
+}
 
-	rs := nameToReplicasetRef[rsName]
+func (v routerView) bucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
+	rs := v.replicasets[rsName]
 	if rs == nil {
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
 
-	routeMap := r.getRouteMap()
-	routeMap.set(bucketID, rs)
+	v.routes.set(bucketID, rs)
 
 	return rs, nil
 }
@@ -273,8 +297,11 @@ func (r *Router) BucketReset(bucketID uint64) {
 		return
 	}
 
-	routeMap := r.getRouteMap()
-	routeMap.reset(bucketID)
+	r.view().bucketReset(bucketID)
+}
+
+func (v routerView) bucketReset(bucketID uint64) {
+	v.routes.reset(bucketID)
 }
 
 func (r *Router) RouteMapClean() {
@@ -374,12 +401,12 @@ func (r *Router) BucketCount() uint64 {
 // succeeds fully or fails fast.
 // Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
-	nameToReplicasetRef := r.getNameToReplicaset()
+	view := r.view()
 
-	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
+	rssToBootstrap := make([]Replicaset, 0, len(view.replicasets))
 	var lastErr error
 
-	for _, rs := range nameToReplicasetRef {
+	for _, rs := range view.replicasets {
 		rssToBootstrap = append(rssToBootstrap, *rs)
 	}
 

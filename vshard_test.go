@@ -3,8 +3,31 @@ package vshard_router //nolint:revive
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
+
+// testRouter returns a router with an initialized route map and the
+// given replicasets.
+func testRouter(totalBucketCount uint64, rsNames ...string) (*Router, nameToReplicasetMap) {
+	r := &Router{
+		cfg: Config{
+			TotalBucketCount: totalBucketCount,
+			Loggerf:          emptyLogfProvider,
+			Metrics:          emptyMetricsProvider,
+		},
+	}
+
+	nameToRs := make(nameToReplicasetMap, len(rsNames))
+	for _, rsName := range rsNames {
+		nameToRs[rsName] = &Replicaset{info: ReplicasetInfo{Name: rsName, UUID: uuid.New()}}
+	}
+
+	r.nameToReplicaset.Store(&nameToRs)
+	r.setEmptyRouteMap()
+
+	return r, nameToRs
+}
 
 func TestRouter_RouterBucketIDStrCRC32(t *testing.T) {
 	r := Router{
@@ -35,3 +58,5 @@ func TestRouter_RouteMapClean(t *testing.T) {
 		r.RouteMapClean()
 	})
 }
+
+const testRouterUpperBound = uint64(10)
