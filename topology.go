@@ -170,7 +170,7 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 
 	switch isConnected, err := conn.ConnectedNow(pool.RW); {
 	case err != nil:
-		r.log().Errorf(ctx, "cant check rs pool conntected rw now with error: %v", err)
+		r.log().Errorf(ctx, "cant check rs pool connected rw now with error: %v", err)
 	case !isConnected:
 		r.log().Errorf(ctx, "got connected now as false to pool.RW")
 	}
