@@ -8,6 +8,7 @@ CHANGES:
 * Add configurable pause before retrying r.Route in Router.Call method.
 * Add ability to set custom dialer in InstaceInfo.
 * Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
+* Bump dependencies, except etcd and go-tarantool.
 
 BUG FIXES:
 * Router.bucketSearchBatched: do not flush out routeMap (#79).

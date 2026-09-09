@@ -150,7 +150,7 @@ func TestConncurrentTopologyChange(t *testing.T) {
 				}
 
 				bucketID := randBucketID(totalBucketCount)
-				args := []interface{}{"arg1"}
+				args := []any{"arg1"}
 
 				callOpts := vshardrouter.CallOpts{}
 
@@ -172,8 +172,8 @@ func TestConncurrentTopologyChange(t *testing.T) {
 			default:
 			}
 
-			args := []interface{}{"arg1"}
-			_, _ = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", args, vshardrouter.RouterMapCallRWOptions{})
+			args := []any{"arg1"}
+			_, _ = vshardrouter.RouterMapCallRW[any](router, ctx, "echo", args, vshardrouter.RouterMapCallRWOptions{})
 			mapCnt++
 		}
 	}()

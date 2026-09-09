@@ -58,11 +58,11 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 		nameToReplicasetRef := r.getNameToReplicaset()
 
 		actualRs := nameToReplicasetRef[rs.info.Name]
-		switch {
-		case actualRs == nil:
+		switch actualRs {
+		case nil:
 			// rs is outdated, can't use it -- let's discover bucket again
 			r.BucketReset(bucketID)
-		case actualRs == rs:
+		case rs:
 			return rs, nil
 		default: // actualRs != rs
 			// update rs -> actualRs for this bucket

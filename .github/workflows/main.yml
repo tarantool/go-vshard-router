@@ -11,28 +11,26 @@ on:
 
 jobs:
   all-tests:
-    # We could replace it with ubuntu-latest after fixing the bug:
-    # https://github.com/tarantool/setup-tarantool/issues/37
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
         golang:
-          - '1.22'
+          - '1.26.5'
           - 'stable'
         tarantool:
-          - '2.8'
-          - '2.10'
+          - '2.11'
+          - '3.6.2'
           - 'master'
         include:
           - tarantool: 'master'
-            golang: '1.22'
+            golang: '1.26.5'
             coverage: true
 
     steps:
       - name: Clone the connector
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Setup tt
         run: |
@@ -42,15 +40,17 @@ jobs:
       - name: Setup tt environment
         run: tt init
 
-      # https://github.com/tarantool/checks/issues/64
-      - name: Install specific CMake version
-        run: pip3 install cmake==3.15.3
-
       - name: Setup Tarantool ${{ matrix.tarantool }}
-        if: matrix.tarantool != 'master'
-        uses: tarantool/setup-tarantool@v2
+        if: startsWith(matrix.tarantool, '2.')
+        uses: tarantool/setup-tarantool@v4
         with:
           tarantool-version: ${{ matrix.tarantool }}
+
+      - name: Setup Tarantool ${{ matrix.tarantool }}
+        if: startsWith(matrix.tarantool, '3.')
+        run: |
+          curl -L https://tarantool.io/release/3/installer.sh | sudo bash
+          sudo apt install -y tarantool=${{ matrix.tarantool }}-1
 
       - name: Get Tarantool master commit
         if: matrix.tarantool == 'master'
@@ -62,7 +62,7 @@ jobs:
       - name: Cache Tarantool master
         if: matrix.tarantool == 'master'
         id: cache-latest
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ${{ github.workspace }}/bin
@@ -71,16 +71,14 @@ jobs:
 
       - name: Setup Tarantool master
         if: matrix.tarantool == 'master' && steps.cache-latest.outputs.cache-hit != 'true'
-        run: |
-          sudo pip3 install cmake==3.15.3
-          sudo tt install tarantool master
+        run: sudo tt install tarantool master
 
       - name: Add Tarantool master to PATH
         if: matrix.tarantool == 'master'
         run: echo "${GITHUB_WORKSPACE}/bin" >> $GITHUB_PATH
 
       - name: Setup golang for the connector and tests
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.golang }}
 

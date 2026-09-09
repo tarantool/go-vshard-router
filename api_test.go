@@ -173,15 +173,15 @@ func TestVshardStorageCallResponseProto_DecodeMsgpack_GetNonTyped(t *testing.T) 
 		return buf
 	}
 
-	tCases := map[string]func() (*bytes.Buffer, []interface{}){
-		"one string": func() (*bytes.Buffer, []interface{}) {
+	tCases := map[string]func() (*bytes.Buffer, []any){
+		"one string": func() (*bytes.Buffer, []any) {
 			buf := prepareBuf()
-			val := []interface{}{"test", "test"}
+			val := []any{"test", "test"}
 
 			err := msgpack.NewEncoder(buf).Encode(val)
 			require.NoError(t, err)
 
-			return buf, []interface{}{val}
+			return buf, []any{val}
 		},
 	}
 
@@ -220,7 +220,7 @@ func BenchmarkVshardStorageCallResponseProto_DecodeMsgpack_Ok(b *testing.B) {
 	for i := 0; i < examplesCount; i++ {
 		buf := bytes.NewBuffer(nil)
 
-		err := msgpack.NewEncoder(buf).Encode([]interface{}{true, i})
+		err := msgpack.NewEncoder(buf).Encode([]any{true, i})
 		require.NoError(b, err)
 
 		bufBytesArr = append(bufBytesArr, buf.Bytes())

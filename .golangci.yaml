@@ -1,61 +1,70 @@
+version: "2"
 run:
-  timeout: 10m
   issues-exit-code: 1
   tests: true
-
-output:
-  print-issued-lines: true
-  print-linter-name: true
-
-linters-settings:
-  dupl:
-    threshold: 100
-  goconst:
-    min-len:         2
-    min-occurrences: 2
-  revive:
-    rules:
-      - name: string-format
-        severity: error
-        disabled: false
-        arguments:
-          - - 'fmt.Errorf[0]'
-            - "/^[^A-Z].*$/"
-            - error messages must not start with capital letter
-          - - 'log.Printf[0]'
-            - "/^[^a-z].*$/"
-            - log messages must not start with lowercase letter
-  misspell:
-    # Correct spellings using locale preferences for US or UK.
-    # Default is to use a neutral variety of English.
-    # Setting locale to US will correct the British spelling of 'colour' to 'color'.
-    locale: US
-    ignore-words:
-      - GitLab
-
 linters:
-  disable-all: true
+  default: none
   enable:
-    - errcheck
-    - goconst
-    - goimports
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-    - revive
-    - typecheck
-    - prealloc
-    # - wls # excluded from linters list because produces too many noise
-    - staticcheck
-    - unused
     - contextcheck
     - durationcheck
+    - errcheck
     - errname
     - exhaustive
+    - goconst
     - gocritic
-    - gofmt
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
     - nilerr
     - nilnil
+    - prealloc
+    - revive
+    - staticcheck
+    - unused
     - usestdlibvars
-    - misspell
+    # - wsl # excluded from linters list because produces too many noise
+  settings:
+    dupl:
+      threshold: 100
+    goconst:
+      min-len: 2
+      ignore-tests: true
+    misspell:
+      locale: US
+      ignore-rules:
+        - GitLab
+    revive:
+      rules:
+        - name: use-any
+        - name: string-format
+          arguments:
+            - - fmt.Errorf[0]
+              - /^[^A-Z].*$/
+              - error messages must not start with capital letter
+            - - log.Printf[0]
+              - /^[^a-z].*$/
+              - log messages must not start with lowercase letter
+          severity: error
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

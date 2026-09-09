@@ -1,0 +1,19 @@
+all: false
+template: testify
+formatter: goimports
+force-file-write: true
+log-level: info
+structname: '{{.InterfaceName}}'
+packages:
+  github.com/tarantool/go-vshard-router/v2:
+    interfaces:
+      Pooler:
+        config:
+          dir: mocks/pool
+          pkgname: mockpool
+          filename: pooler.go
+      TopologyController:
+        config:
+          dir: mocks/topology
+          pkgname: mocktopology
+          filename: topology_controller.go
