@@ -12,7 +12,7 @@ import (
 type CallRequest struct {
 	ctx      context.Context
 	fnc      string
-	args     interface{}
+	args     any
 	bucketID uint64
 }
 
@@ -72,7 +72,7 @@ func (r *Router) Do(req *CallRequest, userMode pool.Mode) *CallResponse {
 
 // Args sets the args for the eval request.
 // Note: default value is empty.
-func (req *CallRequest) Args(args interface{}) *CallRequest {
+func (req *CallRequest) Args(args any) *CallRequest {
 	req.args = args
 	return req
 }
@@ -92,7 +92,7 @@ func (req *CallRequest) BucketID(bucketID uint64) *CallRequest {
 }
 
 // GetTyped waits synchronously for response and calls msgpack.Decoder.Decode(result) if no error happens.
-func (resp *CallResponse) GetTyped(result interface{}) error {
+func (resp *CallResponse) GetTyped(result any) error {
 	if resp.err != nil {
 		return resp.err
 	}
@@ -102,7 +102,7 @@ func (resp *CallResponse) GetTyped(result interface{}) error {
 
 // Get implementation now works synchronously for response.
 // The interface was created purely for convenient migration to go-vshard-router from go-tarantool.
-func (resp *CallResponse) Get() ([]interface{}, error) {
+func (resp *CallResponse) Get() ([]any, error) {
 	if resp.err != nil {
 		return nil, resp.err
 	}
