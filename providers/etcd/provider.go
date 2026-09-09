@@ -58,7 +58,7 @@ func mapCluster2Instances(replicasets []vshardrouter.ReplicasetInfo,
 	currentTopology := map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo{}
 
 	for _, replicasetInfo := range replicasets {
-		var resInst []vshardrouter.InstanceInfo
+		resInst := make([]vshardrouter.InstanceInfo, 0, len(instances[replicasetInfo.Name]))
 
 		for _, inst := range instances[replicasetInfo.Name] {
 			resInst = append(resInst, *inst)

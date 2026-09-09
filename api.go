@@ -145,11 +145,11 @@ func (r *vshardStorageCallResponseProto) DecodeMsgpack(d *msgpack.Decoder) error
 }
 
 type assertError struct {
-	Code     int         `msgpack:"code"`
-	BaseType string      `msgpack:"base_type"`
-	Type     string      `msgpack:"type"`
-	Message  string      `msgpack:"message"`
-	Trace    interface{} `msgpack:"trace"`
+	Code     int    `msgpack:"code"`
+	BaseType string `msgpack:"base_type"`
+	Type     string `msgpack:"type"`
+	Message  string `msgpack:"message"`
+	Trace    any    `msgpack:"trace"`
 }
 
 func (s assertError) Error() string {
@@ -215,22 +215,22 @@ type VshardRouterCallResp struct {
 	buf *bytes.Buffer
 }
 
-// Get returns a response from user defined function as []interface{}.
-func (r VshardRouterCallResp) Get() ([]interface{}, error) {
-	var result []interface{}
+// Get returns a response from user defined function as []any.
+func (r VshardRouterCallResp) Get() ([]any, error) {
+	var result []any
 	err := r.GetTyped(&result)
 
 	return result, err
 }
 
 // GetTyped decodes a response from user defined function into custom values.
-func (r VshardRouterCallResp) GetTyped(result interface{}) error {
+func (r VshardRouterCallResp) GetTyped(result any) error {
 	return msgpack.Unmarshal(r.buf.Bytes(), result)
 }
 
 // Call calls the function identified by 'fnc' on the shard storing the bucket identified by 'bucket_id'.
 func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
-	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	fnc string, args any, opts CallOpts) (VshardRouterCallResp, error) {
 	const vshardStorageClientCall = "vshard.storage.call"
 
 	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
@@ -268,7 +268,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	tntReq := tarantool.NewCallRequest(vshardStorageClientCall).
 		Context(ctx).
-		Args([]interface{}{
+		Args([]any{
 			bucketID,
 			vshardMode,
 			fnc,
@@ -409,31 +409,31 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 // CallRO is an alias for Call with CallModeRO.
 func (r *Router) CallRO(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	fnc string, args any, opts CallOpts) (VshardRouterCallResp, error) {
 	return r.Call(ctx, bucketID, CallModeRO, fnc, args, opts)
 }
 
 // CallRW is an alias for Call with CallModeRW.
 func (r *Router) CallRW(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	fnc string, args any, opts CallOpts) (VshardRouterCallResp, error) {
 	return r.Call(ctx, bucketID, CallModeRW, fnc, args, opts)
 }
 
 // CallRE is an alias for Call with CallModeRE.
 func (r *Router) CallRE(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	fnc string, args any, opts CallOpts) (VshardRouterCallResp, error) {
 	return r.Call(ctx, bucketID, CallModeRE, fnc, args, opts)
 }
 
 // CallBRO is an alias for Call with CallModeBRO.
 func (r *Router) CallBRO(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	fnc string, args any, opts CallOpts) (VshardRouterCallResp, error) {
 	return r.Call(ctx, bucketID, CallModeBRO, fnc, args, opts)
 }
 
 // CallBRE is an alias for Call with CallModeBRE.
 func (r *Router) CallBRE(ctx context.Context, bucketID uint64,
-	fnc string, args interface{}, opts CallOpts) (VshardRouterCallResp, error) {
+	fnc string, args any, opts CallOpts) (VshardRouterCallResp, error) {
 	return r.Call(ctx, bucketID, CallModeBRE, fnc, args, opts)
 }
 
@@ -575,7 +575,7 @@ type replicasetFuture struct {
 // We define it as a distinct function, not a Router method, because golang limitations,
 // see: https://github.com/golang/go/issues/49085.
 func RouterMapCallRW[T any](r *Router, ctx context.Context,
-	fnc string, args interface{}, opts RouterMapCallRWOptions,
+	fnc string, args any, opts RouterMapCallRWOptions,
 ) (map[string]T, error) {
 	const vshardStorageServiceCall = "vshard.storage._call"
 
@@ -592,7 +592,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	defer func() {
 		// call function "storage_unref" if map_callrw is failed or successed
 		storageUnrefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
-			Args([]interface{}{"storage_unref", refID})
+			Args([]any{"storage_unref", refID})
 
 		for _, rs := range nameToReplicasetRef {
 			future := rs.conn.Do(storageUnrefReq, pool.RW)
@@ -607,7 +607,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 
 	storageRefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
 		Context(ctx).
-		Args([]interface{}{"storage_ref", refID, timeout})
+		Args([]any{"storage_ref", refID, timeout})
 
 	var rsFutures = make([]replicasetFuture, 0, len(nameToReplicasetRef))
 
@@ -645,7 +645,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 
 	storageMapReq := tarantool.NewCallRequest(vshardStorageServiceCall).
 		Context(ctx).
-		Args([]interface{}{"storage_map", refID, fnc, args})
+		Args([]any{"storage_map", refID, fnc, args})
 
 	// reuse the same slice again
 	rsFutures = rsFutures[0:0]
