@@ -8,6 +8,15 @@ import (
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 )
 
+const (
+	namespace = "vshard"
+
+	labelOK        = "ok"
+	labelReason    = "reason"
+	labelProcedure = "procedure"
+	labelMapReduce = "map_reduce"
+)
+
 // Check that provider implements MetricsProvider interface
 var _ vshardrouter.MetricsProvider = (*Provider)(nil)
 
@@ -42,24 +51,24 @@ func (pp *Provider) Collect(ch chan<- prometheus.Metric) {
 // CronDiscoveryEvent records the duration of a cron discovery event with labels.
 func (pp *Provider) CronDiscoveryEvent(ok bool, duration time.Duration, reason string) {
 	pp.cronDiscoveryEvent.With(prometheus.Labels{
-		"ok":     strconv.FormatBool(ok),
-		"reason": reason,
+		labelOK:     strconv.FormatBool(ok),
+		labelReason: reason,
 	}).Observe(float64(duration.Milliseconds()))
 }
 
 // RetryOnCall increments the retry counter for a specific reason.
 func (pp *Provider) RetryOnCall(reason string) {
 	pp.retryOnCall.With(prometheus.Labels{
-		"reason": reason,
+		labelReason: reason,
 	}).Inc()
 }
 
 // RequestDuration records the duration of a request with labels for success and map-reduce usage.
 func (pp *Provider) RequestDuration(duration time.Duration, procedure string, ok, mapReduce bool) {
 	pp.requestDuration.With(prometheus.Labels{
-		"ok":         strconv.FormatBool(ok),
-		"map_reduce": strconv.FormatBool(mapReduce),
-		"procedure":  procedure,
+		labelOK:        strconv.FormatBool(ok),
+		labelMapReduce: strconv.FormatBool(mapReduce),
+		labelProcedure: procedure,
 	}).Observe(float64(duration.Milliseconds()))
 }
 
@@ -87,17 +96,17 @@ func NewPrometheusProvider() *Provider {
 	return &Provider{
 		cronDiscoveryEvent: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:      "cron_discovery_event",
-			Namespace: "vshard",
-		}, []string{"ok", "reason"}), // Histogram for tracking cron discovery events
+			Namespace: namespace,
+		}, []string{labelOK, labelReason}), // Histogram for tracking cron discovery events
 
 		retryOnCall: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:      "retry_on_call",
-			Namespace: "vshard",
-		}, []string{"reason"}), // Counter for retry attempts
+			Namespace: namespace,
+		}, []string{labelReason}), // Counter for retry attempts
 
 		requestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:      "request_duration",
-			Namespace: "vshard",
-		}, []string{"procedure", "ok", "map_reduce"}), // Histogram for request durations
+			Namespace: namespace,
+		}, []string{labelProcedure, labelOK, labelMapReduce}), // Histogram for request durations
 	}
 }
