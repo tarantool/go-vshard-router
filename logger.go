@@ -15,7 +15,7 @@ type tarantoolOptsLogger struct {
 
 // Does almost the same thing as defaultLogger in go-tarantool, but uses user provided logger instead of stdout logger.
 // https://github.com/tarantool/go-tarantool/blob/592db69eed8649b82ce432b930c27daeee98c52f/connection.go#L90
-func (l tarantoolOptsLogger) Report(event tarantool.ConnLogKind, conn *tarantool.Connection, v ...interface{}) {
+func (l tarantoolOptsLogger) Report(event tarantool.ConnLogKind, conn *tarantool.Connection, v ...any) {
 	// We use safe type assertion (with ok check), because we don't rely on go-tarantools internal contract about "v...".
 	// Otherwise, we could encounter an unexpected panic due to logging, if go-tarantool maintainers change contract about "v...".
 	switch event {

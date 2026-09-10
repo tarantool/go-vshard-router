@@ -211,7 +211,7 @@ func TestRouter_Call(t *testing.T) {
 	t.Run("proto test", func(t *testing.T) {
 		const maxRespLen = 3
 		for argLen := 0; argLen <= maxRespLen; argLen++ {
-			args := make([]interface{}, 0, argLen)
+			args := make([]any, 0, argLen)
 
 			for i := 0; i < argLen; i++ {
 				args = append(args, "arg")
@@ -221,9 +221,9 @@ func TestRouter_Call(t *testing.T) {
 			resp, err := router.CallRW(ctx, bucketID, "echo", args, routerOpts)
 			require.NoError(t, err, "router.CallRW with no err")
 
-			var resViaVshard interface{}
-			var resDirect interface{}
-			var resGet []interface{}
+			var resViaVshard any
+			var resDirect any
+			var resGet []any
 
 			err = resp.GetTyped(&resViaVshard)
 			require.NoError(t, err, "GetTyped with no err")
@@ -244,7 +244,7 @@ func TestRouter_Call(t *testing.T) {
 
 	t.Run("custom decoders works valid", func(t *testing.T) {
 		res := &CustomDecodingStruct{}
-		args := []interface{}{"Maksim", 21}
+		args := []any{"Maksim", 21}
 
 		resp, err := router.CallRW(ctx, bucketID, "echo", &args, vshardrouter.CallOpts{})
 		require.NoError(t, err, "router.CallRW with no err")
@@ -257,7 +257,7 @@ func TestRouter_Call(t *testing.T) {
 
 	t.Run("router.Call err", func(t *testing.T) {
 		callMode := vshardrouter.CallModeRO
-		args := []interface{}{}
+		args := []any{}
 		callOpts := vshardrouter.CallOpts{}
 
 		_, err := router.Call(ctx, totalBucketCount+1, callMode, "echo", args, callOpts)
@@ -290,7 +290,7 @@ func TestRouter_Call(t *testing.T) {
 		}
 
 		// 2. Try to call something
-		_, err = router.Call(ctx, bucketID, vshardrouter.CallModeRO, "echo", []interface{}{}, vshardrouter.CallOpts{})
+		_, err = router.Call(ctx, bucketID, vshardrouter.CallModeRO, "echo", []any{}, vshardrouter.CallOpts{})
 		require.Nil(t, err, "RouterCallImpl echo finished with no err even on dirty bucket map")
 	})
 }
@@ -334,7 +334,7 @@ func BenchmarkCallSimpleInsert_GO_Call(b *testing.B) {
 			bucketID,
 			vshardrouter.CallModeRW,
 			"product_add",
-			[]interface{}{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
+			[]any{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
 			vshardrouter.CallOpts{Timeout: 10 * time.Second})
 		require.NoError(b, err)
 	}
@@ -368,7 +368,7 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 			bucketID,
 			vshardrouter.CallModeRW,
 			"product_add",
-			[]interface{}{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
+			[]any{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
 			vshardrouter.CallOpts{},
 		)
 		require.NoError(b, err)
@@ -388,13 +388,13 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 			bucketID,
 			vshardrouter.CallModeBRO,
 			"product_get",
-			[]interface{}{&Request{ID: id.String()}},
+			[]any{&Request{ID: id.String()}},
 			vshardrouter.CallOpts{Timeout: time.Second},
 		)
 
 		var product Product
 
-		err2 := resp.GetTyped(&[]interface{}{&product})
+		err2 := resp.GetTyped(&[]any{&product})
 
 		b.StopTimer()
 		require.NoError(b, err1)
@@ -427,7 +427,7 @@ func BenchmarkCallSimpleInsert_Lua(b *testing.B) {
 		id := uuid.New()
 		req := tarantool.NewCallRequest("api.add_product").
 			Context(ctx).
-			Args([]interface{}{&Product{Name: "test-lua", ID: id.String(), Count: 3}})
+			Args([]any{&Product{Name: "test-lua", ID: id.String(), Count: 3}})
 
 		feature := p.Do(req, pool.ANY)
 		faces, err := feature.Get()
@@ -465,7 +465,7 @@ func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
 			bucketID,
 			vshardrouter.CallModeRW,
 			"product_add",
-			[]interface{}{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
+			[]any{&Product{Name: "test-go", BucketID: bucketID, ID: id.String(), Count: 3}},
 			vshardrouter.CallOpts{})
 		require.NoError(b, err)
 	}
@@ -494,11 +494,11 @@ func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
 
 		req := tarantool.NewCallRequest("api.get_product").
 			Context(ctx).
-			Args([]interface{}{&Request{ID: id.String()}})
+			Args([]any{&Request{ID: id.String()}})
 
 		feature := p.Do(req, pool.ANY)
 		var product Product
-		err = feature.GetTyped(&[]interface{}{&product})
+		err = feature.GetTyped(&[]any{&product})
 
 		b.StopTimer()
 		require.NoError(b, err)
@@ -527,7 +527,7 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 	const arg = "arg1"
 
 	// Enusre that RouterMapCallRWImpl works at all
-	echoArgs := []interface{}{arg}
+	echoArgs := []any{arg}
 	respStr, err := vshardrouter.RouterMapCallRW[string](router, ctx, "echo", echoArgs, callOpts)
 	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
 
@@ -535,7 +535,7 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 		require.Equalf(t, arg, v, "RouterMapCallRWImpl value ok for %v", k)
 	}
 
-	echoArgs = []interface{}{1}
+	echoArgs = []any{1}
 	respInt, err := vshardrouter.RouterMapCallRW[int](router, ctx, "echo", echoArgs, vshardrouter.RouterMapCallRWOptions{})
 	require.NoError(t, err, "RouterMapCallRW[int] echo finished with no err")
 	for k, v := range respInt {
@@ -543,7 +543,7 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 	}
 
 	// RouterMapCallRWImpl returns only one value
-	echoArgs = []interface{}{arg, "arg2"}
+	echoArgs = []any{arg, "arg2"}
 	respStr, err = vshardrouter.RouterMapCallRW[string](router, ctx, "echo", echoArgs, callOpts)
 	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
 
@@ -552,8 +552,8 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 	}
 
 	// RouterMapCallRWImpl returns nil when no return value
-	noArgs := []interface{}{}
-	resp, err := vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", noArgs, callOpts)
+	noArgs := []any{}
+	resp, err := vshardrouter.RouterMapCallRW[any](router, ctx, "echo", noArgs, callOpts)
 	require.NoError(t, err, "RouterMapCallRWImpl echo finished with no err")
 
 	for k, v := range resp {
@@ -562,10 +562,10 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 
 	// Ensure that RouterMapCallRWImpl sends requests concurrently
 	const sleepToSec int = 1
-	sleepArgs := []interface{}{sleepToSec}
+	sleepArgs := []any{sleepToSec}
 
 	start := time.Now()
-	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "sleep", sleepArgs, vshardrouter.RouterMapCallRWOptions{
+	_, err = vshardrouter.RouterMapCallRW[any](router, ctx, "sleep", sleepArgs, vshardrouter.RouterMapCallRWOptions{
 		Timeout: 2 * time.Second, // because default timeout is 0.5 sec
 	})
 	duration := time.Since(start)
@@ -575,11 +575,11 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 	require.Less(t, duration, 1200*time.Millisecond, "Requests were send concurrently")
 
 	// RouterMapCallRWImpl returns err on raise_luajit_error
-	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "raise_luajit_error", noArgs, callOpts)
+	_, err = vshardrouter.RouterMapCallRW[any](router, ctx, "raise_luajit_error", noArgs, callOpts)
 	require.NotNil(t, err, "RouterMapCallRWImpl raise_luajit_error finished with error")
 
 	// RouterMapCallRWImpl invalid usage
-	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", nil, callOpts)
+	_, err = vshardrouter.RouterMapCallRW[any](router, ctx, "echo", nil, callOpts)
 	require.NotNil(t, err, "RouterMapCallRWImpl with nil args finished with error")
 
 	// Ensure that RouterMapCallRWImpl doesn't work when it mean't to
@@ -589,7 +589,7 @@ func TestRouter_RouterMapCallRW(t *testing.T) {
 		break
 	}
 
-	_, err = vshardrouter.RouterMapCallRW[interface{}](router, ctx, "echo", echoArgs, callOpts)
+	_, err = vshardrouter.RouterMapCallRW[any](router, ctx, "echo", echoArgs, callOpts)
 	require.NotNilf(t, err, "RouterMapCallRWImpl failed on not full cluster")
 }
 
@@ -755,15 +755,15 @@ func TestReplicsetCallAsync(t *testing.T) {
 	future := rs.CallAsync(ctx, callOpts, "echo", nil)
 	resp, err := future.Get()
 	require.Nil(t, err, "CallAsync finished with no err on nil args")
-	require.Equal(t, resp, []interface{}{}, "CallAsync returns empty arr on nil args")
-	var typed interface{}
+	require.Equal(t, resp, []any{}, "CallAsync returns empty arr on nil args")
+	var typed any
 	err = future.GetTyped(&typed)
 	require.Nil(t, err, "GetTyped finished with no err on nil args")
-	require.Equal(t, []interface{}{}, resp, "GetTyped returns empty arr on nil args")
+	require.Equal(t, []any{}, resp, "GetTyped returns empty arr on nil args")
 
 	const checkUpTo = 100
 	for argLen := 1; argLen <= checkUpTo; argLen++ {
-		args := []interface{}{}
+		args := []any{}
 
 		for i := 0; i < argLen; i++ {
 			args = append(args, "arg")
@@ -774,7 +774,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 		require.Nilf(t, err, "CallAsync finished with no err for argLen %d", argLen)
 		require.Equalf(t, args, resp, "CallAsync resp ok for argLen %d", argLen)
 
-		var typed interface{}
+		var typed any
 		err = future.GetTyped(&typed)
 		require.Nilf(t, err, "GetTyped finished with no err for argLen %d", argLen)
 		require.Equal(t, args, typed, "GetTyped resp ok for argLen %d", argLen)
@@ -785,7 +785,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 
 	var futures = make([]*tarantool.Future, 0, len(rsMap))
 	for _, rs := range rsMap {
-		future := rs.CallAsync(ctx, callOpts, "sleep", []interface{}{1})
+		future := rs.CallAsync(ctx, callOpts, "sleep", []any{1})
 		futures = append(futures, future)
 	}
 
@@ -799,14 +799,14 @@ func TestReplicsetCallAsync(t *testing.T) {
 	require.Less(t, duration, 1200*time.Millisecond, "Async test: requests were sent concurrently")
 
 	// Test no timeout by default
-	future = rs.CallAsync(ctx, callOpts, "sleep", []interface{}{1})
+	future = rs.CallAsync(ctx, callOpts, "sleep", []any{1})
 	_, err = future.Get()
 	require.Nil(t, err, "CallAsync no timeout by default")
 
 	// Test for timeout via ctx
 	ctxTimeout, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
-	future = rs.CallAsync(ctxTimeout, callOpts, "sleep", []interface{}{1})
+	future = rs.CallAsync(ctxTimeout, callOpts, "sleep", []any{1})
 	_, err = future.Get()
 	require.NotNil(t, err, "CallAsync timeout by context does work")
 
@@ -815,7 +815,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 		PoolMode: pool.ANY,
 		Timeout:  500 * time.Millisecond,
 	}
-	future = rs.CallAsync(ctx, callOptsTimeout, "sleep", []interface{}{1})
+	future = rs.CallAsync(ctx, callOptsTimeout, "sleep", []any{1})
 	_, err = future.Get()
 	require.NotNil(t, err, "CallAsync timeout by callOpts does work")
 

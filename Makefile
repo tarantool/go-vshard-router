@@ -8,6 +8,8 @@ GO_CMD?=go
 LOCAL_BIN:=$(CURDIR)/bin
 # Version tag for golangci-lint
 GOLANGCI_TAG:=latest
+# Path to the GOPATH
+GOPATH ?=$(shell $(GO_CMD) env GOPATH)
 # Path to the golangci-lint binary
 GOLANGCI_BIN:=$(GOPATH)/bin/golangci-lint
 
@@ -25,8 +27,8 @@ help: ## This help.
 .PHONY: install-lint
 install-lint:
 ifeq ($(wildcard $(GOLANGCI_BIN)),)
-	$(info #Downloading swaggo latest)
-	$(GO_CMD) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_TAG)
+	$(info #Downloading golangci-lint $(GOLANGCI_TAG))
+	$(GO_CMD) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_TAG)
 endif
 
 test:
@@ -39,8 +41,7 @@ cover: test ## Generate and open the HTML report for test coverage.
 	 $(GO_CMD) tool cover -html=coverage.out
 
 generate/mocks:
-	mockery --name=Pooler --case=underscore --output=mocks/pool --outpkg=mockpool # need fix it later
-	mockery --name=TopologyController --case=underscore --output=mocks/topology --outpkg=mocktopology
+	mockery
 
 .PHONY: lint
 lint: install-lint ## Run GolangCI-Lint to check code quality and style.
