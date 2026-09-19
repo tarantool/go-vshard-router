@@ -60,7 +60,7 @@ func TestReplicaset_BucketStat(t *testing.T) {
 	t.Run("unsupported or broken proto resp", func(t *testing.T) {
 		f := tarantool.NewFuture(tarantool.NewCallRequest("vshard.storage.bucket_stat"))
 
-		bts, _ := msgpack.Marshal([]interface{}{1})
+		bts, _ := msgpack.Marshal([]any{1})
 
 		err := f.SetResponse(tarantool.Header{}, bytes.NewReader(bts))
 		require.NoError(t, err)

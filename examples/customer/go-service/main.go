@@ -119,7 +119,7 @@ func (c *controller) CustomerAddHandler(w http.ResponseWriter, r *http.Request) 
 
 	req.BucketId = bucketID
 
-	resp, err := c.router.Call(ctx, bucketID, vshardrouter.CallModeRW, "customer_add", []interface{}{req}, vshardrouter.CallOpts{
+	resp, err := c.router.Call(ctx, bucketID, vshardrouter.CallModeRW, "customer_add", []any{req}, vshardrouter.CallOpts{
 		Timeout: time.Minute,
 	})
 	if err != nil {
@@ -165,7 +165,7 @@ func (c *controller) CustomerLookupHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	bucketID := c.router.BucketIDStrCRC32(customerID)
-	resp, err := c.router.Call(ctx, bucketID, vshardrouter.CallModeBRO, "customer_lookup", []interface{}{csID}, vshardrouter.CallOpts{
+	resp, err := c.router.Call(ctx, bucketID, vshardrouter.CallModeBRO, "customer_lookup", []any{csID}, vshardrouter.CallOpts{
 		Timeout: time.Minute,
 	})
 	if err != nil {
