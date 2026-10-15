@@ -78,7 +78,7 @@ import (
   "time"
 
   "github.com/google/uuid"
-  "github.com/tarantool/go-tarantool/v2"
+  "github.com/tarantool/go-tarantool/v3"
   vshardrouter "github.com/tarantool/go-vshard-router/v2"
   "github.com/tarantool/go-vshard-router/v2/providers/static"
 )
@@ -127,6 +127,9 @@ func main() {
     // PoolOpts - не обязательный параметр. Дефолтные настройки можно найти в go-tarantool.
     // PoolOpts - настройки пула подключения к репликасету.
     // Они задаются для всех репликасетов одновременно.
+    // Внимание: go-tarantool v3 не разрешает здесь Reconnect, MaxReconnects и Notify —
+    // пул сам управляет переподключением, и pool.NewWithOpts вернёт ошибку,
+    // если эти поля заданы. Логирование задаётся через Loggerf ниже.
     PoolOpts: tarantool.Opts{
       Timeout: time.Second,
     },
@@ -256,9 +259,12 @@ for _, rs := range router.RouteAll() {
 	// Поскольку модуль box рабоатет в рамках подключения к 1му инстансу,
 	// мы можем использовать адаптер, чтобы указать пулу использовать 1 инстанс репликасета в RW.
 	// В этом поможет нам адаптер go-tarantool.
-	adapter := pool.NewConnectorAdapter(rs.Pooler(), pool.RW)
+	adapter := pool.NewConnectorAdapter(rs.Pooler(), pool.ModeRW)
 	// Создадим экземпляр box из go-tarantool.
-	b := box.New(adapter)
+	b, err := box.New(adapter)
+	if err != nil {
+		panic(err)
+	}
 	
 	// Получим информацию из нашего инстанса.
 	info, err := b.Info()
