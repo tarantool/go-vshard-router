@@ -4,7 +4,7 @@ package test_helper
 import (
 	"context"
 
-	ttnt "github.com/tarantool/go-tarantool/v2/test_helpers"
+	ttnt "github.com/tarantool/go-tarantool/v3/test_helpers"
 	"golang.org/x/sync/errgroup"
 )
 

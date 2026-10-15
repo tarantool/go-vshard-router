@@ -9,8 +9,8 @@ import (
 	"time"
 
 	mock "github.com/stretchr/testify/mock"
-	"github.com/tarantool/go-tarantool/v2"
-	"github.com/tarantool/go-tarantool/v2/pool"
+	"github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
 )
 
 // NewPooler creates a new instance of Pooler. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

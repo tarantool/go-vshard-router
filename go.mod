@@ -8,7 +8,7 @@ require (
 	github.com/snksoft/crc v1.1.0
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.12.1
-	github.com/tarantool/go-tarantool/v2 v2.4.2
+	github.com/tarantool/go-tarantool/v3 v3.0.2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.etcd.io/etcd/client/v2 v2.305.17
 	go.etcd.io/etcd/client/v3 v3.5.17
@@ -87,6 +87,7 @@ require (
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tarantool/go-iproto v1.1.0 // indirect
+	github.com/tarantool/go-option v1.1.0 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect

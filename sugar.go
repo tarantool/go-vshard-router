@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tarantool/go-tarantool/v2/pool"
+	"github.com/tarantool/go-tarantool/v3/pool"
 )
 
 // CallRequest helps you to create a call request object for execution

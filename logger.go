@@ -3,7 +3,7 @@ package vshard_router //nolint:revive
 import (
 	"context"
 
-	"github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v3"
 )
 
 // go-tarantool writes logs by default to stderr. Stderr might be not available, or user might use syslog or logging into file.
