@@ -72,7 +72,7 @@ func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
 	instanceName := "instance_001"
 
 	mp := mockpool.NewPooler(t)
-	mp.On("GetInfo").Return(map[string]pool.Info{
+	mp.On("Info").Return(map[string]pool.Info{
 		instanceName: {
 			ConnectedNow: true,
 		},
