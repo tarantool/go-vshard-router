@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v3"
 	"github.com/vmihailenco/msgpack/v5"
 
 	mockpool "github.com/tarantool/go-vshard-router/v2/mocks/pool"

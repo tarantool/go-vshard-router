@@ -10,7 +10,7 @@ import (
 	"github.com/snksoft/crc"
 	"github.com/vmihailenco/msgpack/v5"
 
-	tarantool "github.com/tarantool/go-tarantool/v2"
+	tarantool "github.com/tarantool/go-tarantool/v3"
 )
 
 var (
