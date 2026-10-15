@@ -2,95 +2,101 @@ package vshard_router //nolint:revive
 
 import (
 	"context"
-
-	"github.com/tarantool/go-tarantool/v3"
+	"fmt"
+	"log/slog"
+	"strings"
 )
 
-// go-tarantool writes logs by default to stderr. Stderr might be not available, or user might use syslog or logging into file.
-// So we should implement logging interface and redirect go-tarantool logs to the user's logger.
-type tarantoolOptsLogger struct {
+type tarantoolLogHandler struct {
 	loggerf LogfProvider
-	ctx     context.Context
+	// ctx is the router's context. go-tarantool logs through the non-context
+	// slog methods, so the record's own ctx is context.Background() and this is
+	// the only source of caller values (trace id, tenant) on those records.
+	ctx   context.Context
+	attrs string
+	group string
 }
 
-// Does almost the same thing as defaultLogger in go-tarantool, but uses user provided logger instead of stdout logger.
-// https://github.com/tarantool/go-tarantool/blob/592db69eed8649b82ce432b930c27daeee98c52f/connection.go#L90
-func (l tarantoolOptsLogger) Report(event tarantool.ConnLogKind, conn *tarantool.Connection, v ...any) {
-	// We use safe type assertion (with ok check), because we don't rely on go-tarantools internal contract about "v...".
-	// Otherwise, we could encounter an unexpected panic due to logging, if go-tarantool maintainers change contract about "v...".
-	switch event {
-	case tarantool.LogReconnectFailed:
-		var reconnects uint
-		var err error
-		var reconnectsOk, errOk bool
+var _ slog.Handler = tarantoolLogHandler{}
 
-		if len(v) >= 2 {
-			reconnects, reconnectsOk = v[0].(uint)
-			err, errOk = v[1].(error)
-		}
+func (h tarantoolLogHandler) Enabled(context.Context, slog.Level) bool {
+	return true // the provider owns level filtering
+}
 
-		if reconnectsOk && errOk {
-			l.loggerf.Errorf(l.ctx, "tarantool: reconnect (%d) to %s failed: %s", reconnects, conn.Addr(), err)
-		} else {
-			l.loggerf.Errorf(l.ctx, "tarantool: reconnect to %s failed (unexpected v... format): %+v", conn.Addr(), v)
-		}
-	case tarantool.LogLastReconnectFailed:
-		var err error
-		var errOk bool
+func (h tarantoolLogHandler) Handle(ctx context.Context, r slog.Record) error {
+	var rendered strings.Builder
+	rendered.WriteString(r.Message)
+	rendered.WriteString(h.attrs)
+	r.Attrs(func(attr slog.Attr) bool {
+		appendLogAttr(&rendered, h.group, attr)
+		return true
+	})
+	if h.loggerf == nil {
+		return nil
+	}
 
-		if len(v) >= 1 {
-			err, errOk = v[0].(error)
-		}
+	// Every level maps to the same one on the provider. go-tarantool reports
+	// connect, reconnect and reopen failures at Warn, and a canceled request's
+	// late response as Warn too, so collapsing Warn into Errorf would make a
+	// routine reconnect or a successful bucket lookup indistinguishable from a
+	// real failure.
+	logf := h.loggerf.Debugf
+	switch {
+	case r.Level >= slog.LevelError:
+		logf = h.loggerf.Errorf
+	case r.Level >= slog.LevelWarn:
+		logf = h.loggerf.Warnf
+	case r.Level >= slog.LevelInfo:
+		logf = h.loggerf.Infof
+	}
 
-		if errOk {
-			l.loggerf.Errorf(l.ctx, "tarantool: last reconnect to %s failed: %s, giving it up", conn.Addr(), err)
-		} else {
-			l.loggerf.Errorf(l.ctx, "tarantool: last reconnect to %s failed (unexpected v... format): %v+", conn.Addr(), v)
-		}
-	case tarantool.LogUnexpectedResultId:
-		var header tarantool.Header
-		var headerOk bool
+	//nolint:contextcheck // h.ctx is the router context captured at construction
+	logCtx := h.ctx
+	if logCtx == nil {
+		logCtx = ctx
+	}
+	logf(logCtx, "tarantool: %s", rendered.String())
+	return nil
+}
 
-		if len(v) >= 1 {
-			header, headerOk = v[0].(tarantool.Header)
-		}
+func (h tarantoolLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	var rendered strings.Builder
+	rendered.WriteString(h.attrs)
+	for _, attr := range attrs {
+		appendLogAttr(&rendered, h.group, attr)
+	}
+	h.attrs = rendered.String()
+	return h
+}
 
-		if headerOk {
-			l.loggerf.Errorf(l.ctx, "tarantool: connection %s got unexpected resultId (%d) in response"+
-				"(probably canceled request)",
-				conn.Addr(), header.RequestId)
-		} else {
-			l.loggerf.Errorf(l.ctx, "tarantool: connection %s got unexpected resultId in response"+
-				"(probably canceled request) (unexpected v... format): %+v",
-				conn.Addr(), v)
-		}
-	case tarantool.LogWatchEventReadFailed:
-		var err error
-		var errOk bool
+func (h tarantoolLogHandler) WithGroup(name string) slog.Handler {
+	if name != "" {
+		h.group += name + "."
+	}
+	return h
+}
 
-		if len(v) >= 1 {
-			err, errOk = v[0].(error)
+func appendLogAttr(rendered *strings.Builder, group string, attr slog.Attr) {
+	attr.Value = attr.Value.Resolve()
+	if attr.Equal(slog.Attr{}) {
+		return
+	}
+	if attr.Value.Kind() == slog.KindGroup {
+		if attr.Key != "" {
+			group += attr.Key + "."
 		}
-
-		if errOk {
-			l.loggerf.Errorf(l.ctx, "tarantool: unable to parse watch event: %s", err)
-		} else {
-			l.loggerf.Errorf(l.ctx, "tarantool: unable to parse watch event (unexpected v... format): %+v", v)
+		for _, nested := range attr.Value.Group() {
+			appendLogAttr(rendered, group, nested)
 		}
-	case tarantool.LogAppendPushFailed:
-		var err error
-		var errOk bool
-
-		if len(v) >= 1 {
-			err, errOk = v[0].(error)
-		}
-
-		if errOk {
-			l.loggerf.Errorf(l.ctx, "tarantool: unable to append a push response: %s", err)
-		} else {
-			l.loggerf.Errorf(l.ctx, "tarantool: unable to append a push response (unexpected v... format): %+v", v)
-		}
-	default:
-		l.loggerf.Errorf(l.ctx, "tarantool: unexpected event %d on conn %s, v...: %+v", event, conn, v)
+		return
+	}
+	rendered.WriteByte(' ')
+	rendered.WriteString(group)
+	rendered.WriteString(attr.Key)
+	rendered.WriteByte('=')
+	if attr.Value.Kind() == slog.KindString || attr.Value.Kind() == slog.KindAny {
+		fmt.Fprintf(rendered, "%q", attr.Value.String())
+	} else {
+		rendered.WriteString(attr.Value.String())
 	}
 }
