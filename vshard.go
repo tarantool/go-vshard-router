@@ -3,6 +3,7 @@ package vshard_router //nolint:revive
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -285,12 +286,9 @@ func prepareCfg(ctx context.Context, cfg Config) (Config, error) {
 
 	if cfg.Loggerf == nil {
 		cfg.Loggerf = emptyLogfProvider
-	}
-
-	// Log tarantool internal events using the same logger as router uses.
-	cfg.PoolOpts.Logger = tarantoolOptsLogger{
-		loggerf: cfg.Loggerf,
-		ctx:     ctx,
+		cfg.PoolOpts.Logger = nil
+	} else {
+		cfg.PoolOpts.Logger = slog.New(tarantoolLogHandler{loggerf: cfg.Loggerf, ctx: ctx})
 	}
 
 	if cfg.Metrics == nil {
@@ -311,6 +309,21 @@ func validateCfg(cfg Config) error {
 
 	if cfg.TotalBucketCount == 0 {
 		return fmt.Errorf("bucket count must be greater than 0")
+	}
+
+	// The v3 pool manages reconnection itself and rejects these per instance,
+	// which would otherwise surface as an opaque error from the first
+	// AddReplicaset call instead of a configuration error at startup.
+	if cfg.PoolOpts.Reconnect != 0 {
+		return fmt.Errorf("config PoolOpts.Reconnect: must not be set, the v3 pool reconnects on its own")
+	}
+
+	if cfg.PoolOpts.MaxReconnects != 0 {
+		return fmt.Errorf("config PoolOpts.MaxReconnects: must not be set, the v3 pool reconnects on its own")
+	}
+
+	if cfg.PoolOpts.Notify != nil {
+		return fmt.Errorf("config PoolOpts.Notify: must not be set, the v3 pool owns connection events")
 	}
 
 	return nil
@@ -374,7 +387,7 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 	}
 
 	bucketID := uint64(1)
-	for id, rs := range rssToBootstrap {
+	for _, rs := range rssToBootstrap {
 		if rs.EtalonBucketCount > 0 {
 			err = rs.BucketForceCreate(ctx, bucketID, rs.EtalonBucketCount)
 			if err != nil {
@@ -385,7 +398,7 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 				}
 			} else {
 				nextBucketID := bucketID + rs.EtalonBucketCount
-				r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, id)
+				r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, rs.info.Name)
 				bucketID = nextBucketID
 			}
 		}
