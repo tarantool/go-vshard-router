@@ -106,7 +106,7 @@ func (r *Router) RemoveInstance(ctx context.Context, rsName, instanceName string
 			instanceName)
 
 		for _, trs := range nameToReplicasetRef {
-			_, exists := trs.conn.GetInfo()[instanceName]
+			_, exists := trs.conn.Info()[instanceName]
 			if exists {
 				r.log().Debugf(ctx, "Replicaset found for instance %s, removing it", instanceName)
 
@@ -189,7 +189,7 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 
 	replicaset := &Replicaset{
 		info: rsInfo,
-		conn: &poolerWithGetInfo{Pool: conn},
+		conn: conn,
 	}
 
 	// Create an entirely new map object

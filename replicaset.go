@@ -53,27 +53,17 @@ type ReplicasetCallOpts struct {
 // which is necessary for the correct operation of the library.
 type Pooler interface {
 	pool.Pooler
-	// GetInfo is an addition to the standard interface that allows you
+	// Info is an addition to the standard interface that allows you
 	// to get the current state of the connection pool.
 	// This is necessary for proper operation with topology providers
 	// for adding or removing instances.
-	GetInfo() map[string]pool.Info
+	Info() map[string]pool.Info
 }
 
 type Replicaset struct {
 	conn              Pooler
 	info              ReplicasetInfo
 	EtalonBucketCount uint64
-}
-
-// poolerWithGetInfo adapts the v3 pool to this package's Pooler interface,
-// which still exposes the v2 name GetInfo for its callers.
-type poolerWithGetInfo struct {
-	*pool.Pool
-}
-
-func (p *poolerWithGetInfo) GetInfo() map[string]pool.Info {
-	return p.Pool.Info()
 }
 
 func (rs *Replicaset) Pooler() pool.Pooler {
