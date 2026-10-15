@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
-	"github.com/tarantool/go-tarantool/v2"
-	vshardrouter "github.com/tarantool/go-vshard-router"
-	"github.com/tarantool/go-vshard-router/providers/static"
+	"github.com/tarantool/go-tarantool/v3"
+	vshardrouter "github.com/tarantool/go-vshard-router/v2"
+	"github.com/tarantool/go-vshard-router/v2/providers/static"
 )
 
 // @title           Example customer service Swagger API
