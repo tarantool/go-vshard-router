@@ -3,6 +3,7 @@ package vshard_router //nolint:revive
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -285,12 +286,9 @@ func prepareCfg(ctx context.Context, cfg Config) (Config, error) {
 
 	if cfg.Loggerf == nil {
 		cfg.Loggerf = emptyLogfProvider
-	}
-
-	// Log tarantool internal events using the same logger as router uses.
-	cfg.PoolOpts.Logger = tarantoolOptsLogger{
-		loggerf: cfg.Loggerf,
-		ctx:     ctx,
+		cfg.PoolOpts.Logger = nil
+	} else {
+		cfg.PoolOpts.Logger = slog.New(tarantoolLogHandler{loggerf: cfg.Loggerf})
 	}
 
 	if cfg.Metrics == nil {
@@ -374,7 +372,7 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 	}
 
 	bucketID := uint64(1)
-	for id, rs := range rssToBootstrap {
+	for _, rs := range rssToBootstrap {
 		if rs.EtalonBucketCount > 0 {
 			err = rs.BucketForceCreate(ctx, bucketID, rs.EtalonBucketCount)
 			if err != nil {
@@ -385,7 +383,7 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 				}
 			} else {
 				nextBucketID := bucketID + rs.EtalonBucketCount
-				r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, id)
+				r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, rs.info.Name)
 				bucketID = nextBucketID
 			}
 		}

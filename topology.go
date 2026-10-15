@@ -3,6 +3,7 @@ package vshard_router //nolint:revive
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/tarantool/go-tarantool/v3"
 	"github.com/tarantool/go-tarantool/v3/pool"
@@ -123,6 +124,16 @@ func (r *Router) RemoveInstance(ctx context.Context, rsName, instanceName string
 	return rs.conn.Remove(instanceName)
 }
 
+// poolOpts builds the options for a replicaset connection pool. The pool logs
+// through pool.Opts.Logger only; CheckTimeout repeats the pool.New default
+// because NewWithOpts rejects a non-positive value.
+func (r *Router) poolOpts() pool.Opts {
+	return pool.Opts{
+		CheckTimeout: 1 * time.Second,
+		Logger:       r.cfg.PoolOpts.Logger,
+	}
+}
+
 func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, instances []InstanceInfo) error {
 	r.log().Debugf(ctx, "Trying to add replicaset %s to router topology", rsInfo)
 
@@ -154,31 +165,31 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 		})
 	}
 
-	conn, err := pool.Connect(ctx, rsInstances)
+	conn, err := pool.NewWithOpts(ctx, rsInstances, r.poolOpts())
 	if err != nil {
 		return err
 	}
 
-	poolInfo := conn.GetInfo()
+	poolInfo := conn.Info()
 	for instName, instConnInfo := range poolInfo {
 		connectStatus := "connected now"
 		if !instConnInfo.ConnectedNow {
 			connectStatus = "not connected"
 		}
 
-		r.log().Infof(ctx, "[replicaset %s ] instance %s %s in role %s", rsInfo, instName, connectStatus, instConnInfo.ConnRole)
+		r.log().Infof(ctx, "[replicaset %s ] instance %s %s in role %s", rsInfo, instName, connectStatus, instConnInfo.Role)
 	}
 
-	switch isConnected, err := conn.ConnectedNow(pool.RW); {
+	switch isConnected, err := conn.ConnectedNow(pool.ModeRW); {
 	case err != nil:
 		r.log().Errorf(ctx, "cant check rs pool conntected rw now with error: %v", err)
 	case !isConnected:
-		r.log().Errorf(ctx, "got connected now as false to pool.RW")
+		r.log().Errorf(ctx, "got connected now as false to pool.ModeRW")
 	}
 
 	replicaset := &Replicaset{
 		info: rsInfo,
-		conn: conn,
+		conn: &poolerWithGetInfo{Pool: conn},
 	}
 
 	// Create an entirely new map object
@@ -226,5 +237,27 @@ func (r *Router) RemoveReplicaset(ctx context.Context, rsName string) []error {
 		return []error{err}
 	}
 
-	return rs.conn.CloseGraceful()
+	return flattenJoinedError(rs.conn.CloseGraceful())
+}
+
+// flattenJoinedError turns the pool's joined close error back into one entry per
+// failed connection, which is the shape RemoveReplicaset has always returned.
+func flattenJoinedError(err error) []error {
+	if err == nil {
+		return nil
+	}
+
+	// errors.Join produces an error with Unwrap() []error; asserting the
+	// interface recovers its members without depending on a concrete type.
+	type unwrapper interface {
+		Unwrap() []error
+	}
+
+	if joined, ok := err.(unwrapper); ok {
+		if errs := joined.Unwrap(); len(errs) > 0 {
+			return errs
+		}
+	}
+
+	return []error{err}
 }

@@ -418,7 +418,7 @@ func BenchmarkCallSimpleInsert_Lua(b *testing.B) {
 		Dialer: dialer,
 	}}
 
-	p, err := pool.Connect(ctx, instances)
+	p, err := pool.New(ctx, instances)
 	require.NoError(b, err)
 	require.NotNil(b, p)
 
@@ -429,7 +429,7 @@ func BenchmarkCallSimpleInsert_Lua(b *testing.B) {
 			Context(ctx).
 			Args([]any{&Product{Name: "test-lua", ID: id.String(), Count: 3}})
 
-		feature := p.Do(req, pool.ANY)
+		feature := p.Do(req, pool.ModeAny)
 		faces, err := feature.Get()
 
 		require.NoError(b, err)
@@ -484,7 +484,7 @@ func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
 		Dialer: dialer,
 	}}
 
-	p, err := pool.Connect(ctx, instances)
+	p, err := pool.New(ctx, instances)
 	require.NoError(b, err)
 	require.NotNil(b, p)
 
@@ -496,7 +496,7 @@ func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
 			Context(ctx).
 			Args([]any{&Request{ID: id.String()}})
 
-		feature := p.Do(req, pool.ANY)
+		feature := p.Do(req, pool.ModeAny)
 		var product Product
 		err = feature.GetTyped(&[]any{&product})
 
@@ -668,7 +668,8 @@ func TestReplicaset_Pooler(t *testing.T) {
 	t.Run("go-tarantool box module works ok with go-vshard replicaset", func(t *testing.T) {
 		// check that masters are alive
 		for _, rs := range router.RouteAll() {
-			b := box.New(pool.NewConnectorAdapter(rs.Pooler(), pool.RW))
+			b, err := box.New(pool.NewConnectorAdapter(rs.Pooler(), pool.ModeRW))
+			require.NoError(t, err)
 			require.NotNil(t, b)
 
 			info, err := b.Info()
@@ -748,7 +749,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 	}
 
 	callOpts := vshardrouter.ReplicasetCallOpts{
-		PoolMode: pool.ANY,
+		PoolMode: pool.ModeAny,
 	}
 
 	// Tests for arglen ans response parsing
@@ -783,14 +784,17 @@ func TestReplicsetCallAsync(t *testing.T) {
 	// Test for async execution
 	timeBefore := time.Now()
 
-	var futures = make([]*tarantool.Future, 0, len(rsMap))
+	var futures = make([]tarantool.Future, 0, len(rsMap))
 	for _, rs := range rsMap {
 		future := rs.CallAsync(ctx, callOpts, "sleep", []any{1})
 		futures = append(futures, future)
 	}
 
+	errs := make([]error, len(futures))
 	for i, future := range futures {
-		_, err := future.Get()
+		_, errs[i] = future.Get()
+	}
+	for i, err := range errs {
 		require.Nil(t, err, "future[%d].Get finished with no err for async test", i)
 	}
 
@@ -812,7 +816,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 
 	// Test for timeout via config
 	callOptsTimeout := vshardrouter.ReplicasetCallOpts{
-		PoolMode: pool.ANY,
+		PoolMode: pool.ModeAny,
 		Timeout:  500 * time.Millisecond,
 	}
 	future = rs.CallAsync(ctx, callOptsTimeout, "sleep", []any{1})
