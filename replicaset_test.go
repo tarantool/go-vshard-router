@@ -46,8 +46,7 @@ func TestReplicaset_BucketStat(t *testing.T) {
 	t.Run("pool do error", func(t *testing.T) {
 		futureError := fmt.Errorf("testErr")
 
-		errFuture := tarantool.NewFuture(tarantool.NewCallRequest("test"))
-		errFuture.SetError(futureError)
+		errFuture := tarantool.NewFutureWithErr(tarantool.NewCallRequest("test"), futureError)
 
 		mPool := mockpool.NewPooler(t)
 		mPool.On("Do", mock.Anything, mock.Anything).Return(errFuture)
@@ -58,11 +57,10 @@ func TestReplicaset_BucketStat(t *testing.T) {
 	})
 
 	t.Run("unsupported or broken proto resp", func(t *testing.T) {
-		f := tarantool.NewFuture(tarantool.NewCallRequest("vshard.storage.bucket_stat"))
-
 		bts, _ := msgpack.Marshal([]any{1})
 
-		err := f.SetResponse(tarantool.Header{}, bytes.NewReader(bts))
+		f, err := tarantool.NewFutureWithResponse(
+			tarantool.NewCallRequest("vshard.storage.bucket_stat"), tarantool.Header{}, bytes.NewReader(bts))
 		require.NoError(t, err)
 
 		mPool := mockpool.NewPooler(t)
