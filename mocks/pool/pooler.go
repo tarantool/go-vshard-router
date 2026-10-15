@@ -373,12 +373,12 @@ func (_c *Pooler_Do_Call) RunAndReturn(run func(req tarantool.Request, mode pool
 	return _c
 }
 
-// GetInfo provides a mock function for the type Pooler
-func (_mock *Pooler) GetInfo() map[string]pool.Info {
+// Info provides a mock function for the type Pooler
+func (_mock *Pooler) Info() map[string]pool.Info {
 	ret := _mock.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetInfo")
+		panic("no return value specified for Info")
 	}
 
 	var r0 map[string]pool.Info
@@ -392,29 +392,29 @@ func (_mock *Pooler) GetInfo() map[string]pool.Info {
 	return r0
 }
 
-// Pooler_GetInfo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInfo'
-type Pooler_GetInfo_Call struct {
+// Pooler_Info_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Info'
+type Pooler_Info_Call struct {
 	*mock.Call
 }
 
-// GetInfo is a helper method to define mock.On call
-func (_e *Pooler_Expecter) GetInfo() *Pooler_GetInfo_Call {
-	return &Pooler_GetInfo_Call{Call: _e.mock.On("GetInfo")}
+// Info is a helper method to define mock.On call
+func (_e *Pooler_Expecter) Info() *Pooler_Info_Call {
+	return &Pooler_Info_Call{Call: _e.mock.On("Info")}
 }
 
-func (_c *Pooler_GetInfo_Call) Run(run func()) *Pooler_GetInfo_Call {
+func (_c *Pooler_Info_Call) Run(run func()) *Pooler_Info_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run()
 	})
 	return _c
 }
 
-func (_c *Pooler_GetInfo_Call) Return(stringToInfo map[string]pool.Info) *Pooler_GetInfo_Call {
+func (_c *Pooler_Info_Call) Return(stringToInfo map[string]pool.Info) *Pooler_Info_Call {
 	_c.Call.Return(stringToInfo)
 	return _c
 }
 
-func (_c *Pooler_GetInfo_Call) RunAndReturn(run func() map[string]pool.Info) *Pooler_GetInfo_Call {
+func (_c *Pooler_Info_Call) RunAndReturn(run func() map[string]pool.Info) *Pooler_Info_Call {
 	_c.Call.Return(run)
 	return _c
 }
