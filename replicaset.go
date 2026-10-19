@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tarantool/go-tarantool/v2"
-	"github.com/tarantool/go-tarantool/v2/pool"
+	"github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
 	"github.com/vmihailenco/msgpack/v5"
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
@@ -53,11 +53,11 @@ type ReplicasetCallOpts struct {
 // which is necessary for the correct operation of the library.
 type Pooler interface {
 	pool.Pooler
-	// GetInfo is an addition to the standard interface that allows you
+	// Info is an addition to the standard interface that allows you
 	// to get the current state of the connection pool.
 	// This is necessary for proper operation with topology providers
 	// for adding or removing instances.
-	GetInfo() map[string]pool.ConnectionInfo
+	Info() map[string]pool.Info
 }
 
 type Replicaset struct {
@@ -80,10 +80,10 @@ func (rs *Replicaset) BucketStat(ctx context.Context, bucketID uint64) (BucketSt
 	return bucketStatWait(future)
 }
 
-func (rs *Replicaset) bucketStatAsync(ctx context.Context, bucketID uint64) *tarantool.Future {
+func (rs *Replicaset) bucketStatAsync(ctx context.Context, bucketID uint64) tarantool.Future {
 	const bucketStatFnc = "vshard.storage.bucket_stat"
 
-	return rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.RO}, bucketStatFnc, []any{bucketID})
+	return rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModeRO}, bucketStatFnc, []any{bucketID})
 }
 
 type vshardStorageBucketStatResponseProto struct {
@@ -138,10 +138,11 @@ func (r *vshardStorageBucketStatResponseProto) DecodeMsgpack(d *msgpack.Decoder)
 	return nil
 }
 
-func bucketStatWait(future *tarantool.Future) (BucketStatInfo, error) {
+func bucketStatWait(future tarantool.Future) (BucketStatInfo, error) {
 	var bucketStatResponse vshardStorageBucketStatResponseProto
 
 	err := future.GetTyped(&bucketStatResponse)
+	future.Release()
 	if err != nil {
 		return BucketStatInfo{}, err
 	}
@@ -153,8 +154,9 @@ func bucketStatWait(future *tarantool.Future) (BucketStatInfo, error) {
 	return bucketStatResponse.info, nil
 }
 
-// CallAsync sends async request to remote storage
-func (rs *Replicaset) CallAsync(ctx context.Context, opts ReplicasetCallOpts, fnc string, args any) *tarantool.Future {
+// CallAsync sends async request to remote storage. The returned Future must be
+// released by the caller once its response has been consumed.
+func (rs *Replicaset) CallAsync(ctx context.Context, opts ReplicasetCallOpts, fnc string, args any) tarantool.Future {
 	if opts.Timeout > 0 {
 		// Don't set any timeout by default, parent context timeout would be inherited in this case.
 		// Don't call cancel in defer, because this we send request asynchronously,
@@ -171,14 +173,14 @@ func (rs *Replicaset) CallAsync(ctx context.Context, opts ReplicasetCallOpts, fn
 	return rs.conn.Do(req, opts.PoolMode)
 }
 
-func (rs *Replicaset) bucketsDiscoveryAsync(ctx context.Context, from uint64) *tarantool.Future {
+func (rs *Replicaset) bucketsDiscoveryAsync(ctx context.Context, from uint64) tarantool.Future {
 	const bucketsDiscoveryFnc = "vshard.storage.buckets_discovery"
 
 	var bucketsDiscoveryPaginationRequest = struct {
 		From uint64 `msgpack:"from"`
 	}{From: from}
 
-	return rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.PreferRO}, bucketsDiscoveryFnc,
+	return rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModePreferRO}, bucketsDiscoveryFnc,
 		[]any{bucketsDiscoveryPaginationRequest})
 }
 
@@ -187,12 +189,13 @@ type bucketsDiscoveryResp struct {
 	NextFrom uint64   `msgpack:"next_from"`
 }
 
-func bucketsDiscoveryWait(future *tarantool.Future) (bucketsDiscoveryResp, error) {
+func bucketsDiscoveryWait(future tarantool.Future) (bucketsDiscoveryResp, error) {
 	// We intentionally don't support old vshard storages that mentioned here:
 	// https://github.com/tarantool/vshard/blob/8d299bfecff8bc656056658350ad48c829f9ad3f/vshard/router/init.lua#L343
 	var resp bucketsDiscoveryResp
 
 	err := future.GetTyped(&[]any{&resp})
+	future.Release()
 	if err != nil {
 		return resp, fmt.Errorf("future.GetTyped() failed: %v", err)
 	}
@@ -296,8 +299,9 @@ func (rs *Replicaset) BucketsCount(ctx context.Context) (uint64, error) {
 
 	var bucketCount uint64
 
-	fut := rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ANY}, bucketCountFnc, nil)
+	fut := rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModeAny}, bucketCountFnc, nil)
 	err := fut.GetTyped(&[]any{&bucketCount})
+	fut.Release()
 
 	return bucketCount, err
 }
@@ -305,8 +309,9 @@ func (rs *Replicaset) BucketsCount(ctx context.Context) (uint64, error) {
 func (rs *Replicaset) BucketForceCreate(ctx context.Context, firstBucketID, count uint64) error {
 	const bucketForceCreateFnc = "vshard.storage.bucket_force_create"
 
-	fut := rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.RW}, bucketForceCreateFnc, []any{firstBucketID, count})
+	fut := rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModeRW}, bucketForceCreateFnc, []any{firstBucketID, count})
 	_, err := fut.GetResponse()
+	fut.Release()
 
 	return err
 }

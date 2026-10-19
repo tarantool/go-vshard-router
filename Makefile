@@ -24,6 +24,11 @@ GOLANGCI_BIN:=$(GOPATH)/bin/golangci-lint
 help: ## This help.
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+# v2 refuses to parse the v3 keys in .mockery.yml.
+MOCKERY_TAG:=v3.8.1
+# Path to the mockery binary
+MOCKERY_BIN:=$(GOPATH)/bin/mockery
+
 .PHONY: install-lint
 install-lint:
 ifeq ($(wildcard $(GOLANGCI_BIN)),)
@@ -40,8 +45,15 @@ test:
 cover: test ## Generate and open the HTML report for test coverage.
 	 $(GO_CMD) tool cover -html=coverage.out
 
-generate/mocks:
-	mockery
+.PHONY: install-mockery
+install-mockery:
+ifeq ($(wildcard $(MOCKERY_BIN)),)
+	$(info #Downloading mockery $(MOCKERY_TAG))
+	$(GO_CMD) install github.com/vektra/mockery/v3@$(MOCKERY_TAG)
+endif
+
+generate/mocks: install-mockery ## Regenerate the mocks from .mockery.yml.
+	$(MOCKERY_BIN) --config .mockery.yml
 
 .PHONY: lint
 lint: install-lint ## Run GolangCI-Lint to check code quality and style.

@@ -1,16 +1,43 @@
 ## Unreleased
 
 CHANGES:
+* Bump go-tarantool from v2.4.2 to v3.0.2.
+* `Config.Loggerf` is forwarded to the connection pool as well, so pool-level events
+  (connect, reconnect and reopen failures) reach the same logger as connection-level ones.
+  Records keep their severity: go-tarantool v3 reports these at `Warn`, so they arrive via
+  `LogfProvider.Warnf` rather than `Errorf` as the v2 adapter sent them. The router's own
+  context is attached to every such record, because the connector logs through the
+  non-context `slog` methods.
+* `Replicaset.Pooler()` returns the v3 `pool.Pooler`, which no longer carries the synchronous
+  `Call`/`Eval`/`Select` family — use `Do` with a request type.
+* `Pooler.Info()` replaces `GetInfo()`; `pool.ConnectionInfo` became `pool.Info` with `Role`
+  instead of `ConnRole`.
+* `Config.PoolOpts` must not set `Reconnect`, `MaxReconnects` or `Notify`: the v3 pool
+  rejects them, because it manages reconnection itself. `NewRouter` now rejects such a
+  config up front instead of failing later inside the topology provider.
+* `sugar.go` is removed, breaking for callers outside this repo: `CallRequest`/`CallResponse`
+  and `Router.Do` were the compat layer over the synchronous API v2 offered, which v3 dropped.
+* Futures are no longer managed by the connector on the caller's behalf: consumed ones are
+  released after use, and requests that are not waited for carry a cancelable context.
+  `Replicaset.CallAsync` now returns the v3 `tarantool.Future` interface, so callers must
+  `Release` it after reading the response.
+* Bucket discovery cancels the requests it stops waiting for, so their late responses reach
+  go-tarantool as unknown request ids and it reports each one at `Warn`. A deployment that
+  wires `Config.Loggerf` therefore sees up to one warning per abandoned replicaset on an
+  uncached bucket lookup.
 * Slog provider moved to providers directory.
 * More strict check of vshard.storage.call response.
-* Bump go-tarantool from v2.3.0 to v2.3.1.
 * Get rid of nameToReplicasetMutex, use atomic instead.
 * Add configurable pause before retrying r.Route in Router.Call method.
 * Add ability to set custom dialer in InstaceInfo.
 * Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
-* Bump dependencies, except etcd.
 
 BUG FIXES:
+* `ClusterBootstrap` logged a replicaset's slice index in place of its name.
+* Bucket discovery no longer leaks a goroutine per abandoned replicaset: both searches cancel
+  the requests they stop waiting for instead of relying on the caller's context to expire.
+* `RemoveReplicaset` returns one error per failed connection rather than a single joined
+  aggregate.
 * Router.bucketSearchBatched: do not flush out routeMap (#79).
 
 ## v2.0.5

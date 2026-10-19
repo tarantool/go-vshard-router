@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tarantool/go-tarantool/v2"
-	"github.com/tarantool/go-tarantool/v2/pool"
+	"github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
 	"github.com/vmihailenco/msgpack/v5"
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
@@ -242,18 +242,18 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 	switch mode {
 	case CallModeRO:
-		poolMode, vshardMode = pool.RO, ReadMode
+		poolMode, vshardMode = pool.ModeRO, ReadMode
 	case CallModeRW:
-		poolMode, vshardMode = pool.RW, WriteMode
+		poolMode, vshardMode = pool.ModeRW, WriteMode
 	case CallModeRE:
-		// poolMode, vshardMode = pool.PreferRO, ReadMode
+		// poolMode, vshardMode = pool.ModePreferRO, ReadMode
 		// since go-tarantool always use balance=true politic,
 		// we can't support this case until: https://github.com/tarantool/go-tarantool/issues/400
 		return VshardRouterCallResp{}, fmt.Errorf("mode VshardCallModeRE is not supported yet")
 	case CallModeBRO:
-		poolMode, vshardMode = pool.ANY, ReadMode
+		poolMode, vshardMode = pool.ModeAny, ReadMode
 	case CallModeBRE:
-		poolMode, vshardMode = pool.PreferRO, ReadMode
+		poolMode, vshardMode = pool.ModePreferRO, ReadMode
 	default:
 		return VshardRouterCallResp{}, fmt.Errorf("unknown VshardCallMode(%d)", mode)
 	}
@@ -313,7 +313,9 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 		storageCallResponse := vshardStorageCallResponseProto{}
 
-		err = rs.conn.Do(tntReq, poolMode).GetTyped(&storageCallResponse)
+		future := rs.conn.Do(tntReq, poolMode)
+		err = future.GetTyped(&storageCallResponse)
+		future.Release()
 		if err != nil {
 			return VshardRouterCallResp{}, fmt.Errorf("got error on future.GetTyped(): %w", err)
 		}
@@ -565,7 +567,7 @@ func (r *storageRefResponseProto) DecodeMsgpack(d *msgpack.Decoder) error {
 type replicasetFuture struct {
 	// replicaset name
 	name   string
-	future *tarantool.Future
+	future tarantool.Future
 }
 
 // RouterMapCallRW is a consistent Map-Reduce. The given function is called on all masters in the
@@ -589,15 +591,30 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 
 	nameToReplicasetRef := r.getNameToReplicaset()
 
+	//nolint:contextcheck // the map-call context is already canceled here
 	defer func() {
-		// call function "storage_unref" if map_callrw is failed or successed
+		// call function "storage_unref" if map_callrw is failed or successed.
+		// A future with no context is only reaped by the connection's own
+		// Timeout, which is off by default.
+		unrefCtx, unrefCancel := context.WithTimeout(context.Background(), timeout)
+
 		storageUnrefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
+			Context(unrefCtx).
 			Args([]any{"storage_unref", refID})
 
+		unrefFutures := make([]tarantool.Future, 0, len(nameToReplicasetRef))
 		for _, rs := range nameToReplicasetRef {
-			future := rs.conn.Do(storageUnrefReq, pool.RW)
-			future.SetError(nil) // TODO: does it cancel the request above or not?
+			unrefFutures = append(unrefFutures, rs.conn.Do(storageUnrefReq, pool.ModeRW))
 		}
+
+		go func() {
+			defer unrefCancel()
+
+			for _, future := range unrefFutures {
+				<-future.WaitChan()
+				future.Release()
+			}
+		}()
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -611,11 +628,25 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 
 	var rsFutures = make([]replicasetFuture, 0, len(nameToReplicasetRef))
 
+	// Futures must finish before Release can return them to the pool.
+	defer func() {
+		for _, rsFuture := range rsFutures {
+			if rsFuture.future != nil {
+				future := rsFuture.future
+				waitChan := future.WaitChan()
+				go func() {
+					<-waitChan
+					future.Release()
+				}()
+			}
+		}
+	}()
+
 	// ref stage: send concurrent ref requests
 	for name, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, replicasetFuture{
 			name:   name,
-			future: rs.conn.Do(storageRefReq, pool.RW),
+			future: rs.conn.Do(storageRefReq, pool.ModeRW),
 		})
 	}
 
@@ -623,10 +654,13 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	var totalBucketCount uint64
 	// proto for 'storage_ref' method:
 	// https://github.com/tarantool/vshard/blob/dfa2cc8a2aff221d5f421298851a9a229b2e0434/vshard/storage/init.lua#L3137
-	for _, rsFuture := range rsFutures {
+	for i, rsFuture := range rsFutures {
 		var storageRefResponse storageRefResponseProto
 
-		if err := rsFuture.future.GetTyped(&storageRefResponse); err != nil {
+		err := rsFuture.future.GetTyped(&storageRefResponse)
+		rsFuture.future.Release()
+		rsFutures[i].future = nil
+		if err != nil {
 			return nil, fmt.Errorf("rs {%s} storage_ref err: %v", rsFuture.name, err)
 		}
 
@@ -654,16 +688,18 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 	for name, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, replicasetFuture{
 			name:   name,
-			future: rs.conn.Do(storageMapReq, pool.RW),
+			future: rs.conn.Do(storageMapReq, pool.ModeRW),
 		})
 	}
 
 	// map stage: get their responses
 	nameToResult := make(map[string]T)
-	for _, rsFuture := range rsFutures {
+	for i, rsFuture := range rsFutures {
 		storageMapResponse := storageMapResponseProto[T]{}
 
 		err := rsFuture.future.GetTyped(&storageMapResponse)
+		rsFuture.future.Release()
+		rsFutures[i].future = nil
 		if err != nil {
 			return nil, fmt.Errorf("rs {%s} storage_map err: %v", rsFuture.name, err)
 		}

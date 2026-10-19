@@ -104,7 +104,7 @@ import (
 	"github.com/tarantool/go-vshard-router/v2/providers/static"
 
 	"github.com/google/uuid"
-	"github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v3"
 )
 
 func main() {
@@ -124,6 +124,10 @@ func main() {
 			},
 		}),
 		TotalBucketCount: 128000,
+		// PoolOpts are connection options for every replicaset pool.
+		// Note: go-tarantool v3 rejects Reconnect, MaxReconnects and Notify here —
+		// the pool manages reconnection itself and NewWithOpts returns an error
+		// when they are set. Use Loggerf in Config for logging.
 		PoolOpts: tarantool.Opts{
 			Timeout: time.Second,
 		},

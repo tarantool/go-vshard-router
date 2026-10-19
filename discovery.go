@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/tarantool/go-tarantool/v2"
+	"github.com/tarantool/go-tarantool/v3"
 )
 
 // --------------------------------------------------------------------------------
@@ -86,20 +86,43 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 
 	type rsFuture struct {
 		rsName string
-		future *tarantool.Future
+		future tarantool.Future
 	}
 
 	var rsFutures = make([]rsFuture, 0, len(nameToReplicasetRef))
+
+	// The search abandons the requests it no longer waits for. They are only
+	// reaped by their own context: the connector keeps context-bearing requests
+	// out of the queue its Timeout drains.
+	searchCtx, searchCancel := context.WithCancel(ctx)
+
+	// Futures must finish before Release can return them to the pool.
+	defer func() {
+		for _, rsFuture := range rsFutures {
+			if rsFuture.future != nil {
+				future := rsFuture.future
+				waitChan := future.WaitChan()
+				go func() {
+					<-waitChan
+					future.Release()
+				}()
+			}
+		}
+	}()
+	defer searchCancel() // cancel first, so no waiter waits on a live request
+
 	// Send a bunch of parallel requests
 	for rsName, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, rsFuture{
 			rsName: rsName,
-			future: rs.bucketStatAsync(ctx, bucketID),
+			future: rs.bucketStatAsync(searchCtx, bucketID),
 		})
 	}
 
-	for _, rsFuture := range rsFutures {
-		if _, err := bucketStatWait(rsFuture.future); err != nil {
+	for i, rsFuture := range rsFutures {
+		_, err := bucketStatWait(rsFuture.future)
+		rsFutures[i].future = nil
+		if err != nil {
 			var vshardError StorageCallVShardError
 			if !errors.As(err, &vshardError) {
 				r.log().Errorf(ctx, "bucketSearchLegacy: bucketStatWait call error for %v: %v", rsFuture.rsName, err)
@@ -115,7 +138,6 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 			return nil, newVShardErrorNoRouteToBucket(bucketID)
 		}
 
-		// TODO: should we release resources for unhandled futures?
 		return rs, nil
 	}
 
@@ -140,23 +162,43 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 	type rsFuture struct {
 		rs     *Replicaset
 		rsName string
-		future *tarantool.Future
+		future tarantool.Future
 	}
 
 	var rsFutures = make([]rsFuture, 0, len(nameToReplicasetRef))
+
+	// Same reason as in bucketSearchLegacy: quick mode returns on the first hit.
+	searchCtx, searchCancel := context.WithCancel(ctx)
+
+	// Futures must finish before Release can return them to the pool.
+	defer func() {
+		for _, rsFuture := range rsFutures {
+			if rsFuture.future != nil {
+				future := rsFuture.future
+				waitChan := future.WaitChan()
+				go func() {
+					<-waitChan
+					future.Release()
+				}()
+			}
+		}
+	}()
+	defer searchCancel() // cancel first, so no waiter waits on a live request
+
 	// Send a bunch of parallel requests
 	for rsName, rs := range nameToReplicasetRef {
 		rsFutures = append(rsFutures, rsFuture{
 			rs:     rs,
 			rsName: rsName,
-			future: rs.bucketsDiscoveryAsync(ctx, bucketIDToFind),
+			future: rs.bucketsDiscoveryAsync(searchCtx, bucketIDToFind),
 		})
 	}
 
 	var rs *Replicaset
 
-	for _, rsFuture := range rsFutures {
+	for i, rsFuture := range rsFutures {
 		resp, err := bucketsDiscoveryWait(rsFuture.future)
+		rsFutures[i].future = nil
 		if err != nil {
 			r.log().Errorf(ctx, "bucketSearchBatched: bucketsDiscoveryWait error for %v: %v", rsFuture.rsName, err)
 			// just skip, we still may find our bucket in another replicaset

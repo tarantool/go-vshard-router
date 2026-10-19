@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/tarantool/go-tarantool/v2/pool"
+	"github.com/tarantool/go-tarantool/v3/pool"
 	mockpool "github.com/tarantool/go-vshard-router/v2/mocks/pool"
 )
 
@@ -72,7 +72,7 @@ func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
 	instanceName := "instance_001"
 
 	mp := mockpool.NewPooler(t)
-	mp.On("GetInfo").Return(map[string]pool.ConnectionInfo{
+	mp.On("Info").Return(map[string]pool.Info{
 		instanceName: {
 			ConnectedNow: true,
 		},
@@ -124,6 +124,48 @@ func TestController_RemoveReplicaset(t *testing.T) {
 		errs := router.Topology().RemoveReplicaset(ctx, uuidToRemove.String())
 		require.Empty(t, errs)
 	})
+}
+
+func TestController_RemoveReplicasetKeepsPerConnectionErrors(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	rsName := uuid.New().String()
+
+	closeA := errors.New("close A failed")
+	closeB := errors.New("close B failed")
+
+	cases := []struct {
+		name     string
+		closeErr error
+		want     int
+	}{
+		{"no error", nil, 0},
+		{"single error", closeA, 1},
+		{"joined errors", errors.Join(closeA, closeB), 2},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			mPool := mockpool.NewPooler(t)
+			mPool.On("CloseGraceful").Return(tc.closeErr)
+
+			router := Router{cfg: Config{Loggerf: emptyLogfProvider}}
+			_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+				rsName: {conn: mPool},
+			})
+
+			errs := router.Topology().RemoveReplicaset(ctx, rsName)
+			require.Len(t, errs, tc.want)
+
+			if tc.want == 2 {
+				require.True(t, errors.Is(errs[0], closeA) || errors.Is(errs[0], closeB))
+				require.True(t, errors.Is(errs[1], closeA) || errors.Is(errs[1], closeB))
+			}
+		})
+	}
 }
 
 func TestRouter_AddReplicaset_AlreadyExists(t *testing.T) {

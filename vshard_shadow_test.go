@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tarantool/go-tarantool/v3"
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 	"github.com/tarantool/go-vshard-router/v2/providers/static"
 )
@@ -121,6 +123,37 @@ func TestInstanceInfo_Validate(t *testing.T) {
 			} else {
 				require.Error(t, err)
 			}
+		})
+	}
+}
+
+func TestNewRouter_RejectsPoolOptsTheV3PoolRefuses(t *testing.T) {
+	ctx := context.TODO()
+
+	cases := []struct {
+		name string
+		opts tarantool.Opts
+	}{
+		{"reconnect", tarantool.Opts{Reconnect: time.Second}},
+		{"max reconnects", tarantool.Opts{MaxReconnects: 5}},
+		{"notify", tarantool.Opts{Notify: make(chan<- tarantool.ConnEvent, 1)}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+				TotalBucketCount: 256000,
+				TopologyProvider: &errorTopologyProvider{},
+				PoolOpts:         tc.opts,
+			})
+
+			// Rejected by validateCfg, so the provider is never initialized and
+			// the caller does not see ErrTopologyProvider. prepareCfg formats with
+			// %v rather than %w, so match on the message.
+			require.ErrorContains(t, err, "config invalid")
+			require.ErrorContains(t, err, "must not be set")
+			require.NotErrorIs(t, err, vshardrouter.ErrTopologyProvider)
+			require.Nil(t, r)
 		})
 	}
 }
