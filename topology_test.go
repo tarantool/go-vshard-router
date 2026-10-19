@@ -85,7 +85,7 @@ func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
 			Loggerf: emptyLogfProvider,
 		},
 	}
-	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+	_ = router.swapNameToReplicaset(nil, &nameToReplicasetMap{
 		"replicaset_1": {
 			conn: mp,
 		},
@@ -110,7 +110,7 @@ func TestController_RemoveReplicaset(t *testing.T) {
 			Loggerf: emptyLogfProvider,
 		},
 	}
-	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+	_ = router.swapNameToReplicaset(nil, &nameToReplicasetMap{
 		uuidToRemove.String(): {conn: mPool},
 	})
 
@@ -136,7 +136,7 @@ func TestRouter_AddReplicaset_AlreadyExists(t *testing.T) {
 			Loggerf: emptyLogfProvider,
 		},
 	}
-	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+	_ = router.swapNameToReplicaset(nil, &nameToReplicasetMap{
 		alreadyExistingRsName: {conn: nil},
 	})
 
@@ -157,7 +157,7 @@ func TestRouter_AddReplicaset_InvalidReplicaset(t *testing.T) {
 			Loggerf: emptyLogfProvider,
 		},
 	}
-	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
+	_ = router.swapNameToReplicaset(nil, &nameToReplicasetMap{
 		alreadyExistingRsName: {conn: nil},
 	})
 
