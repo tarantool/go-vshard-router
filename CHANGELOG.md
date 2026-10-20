@@ -17,6 +17,10 @@ CHANGES:
   config up front instead of failing later inside the topology provider.
 * `sugar.go` is removed, breaking for callers outside this repo: `CallRequest`/`CallResponse`
   and `Router.Do` were the compat layer over the synchronous API v2 offered, which v3 dropped.
+  `Config.BucketGetter` and `Config.RequestTimeout` go with it: `Router.Do` was their only
+  reader, so they would compile and do nothing. Pass the bucket id to `Router.Call`
+  explicitly, and set the call budget with `CallOpts.Timeout` or
+  `RouterMapCallRWOptions.Timeout` (the default stays 500ms).
 * Futures are no longer managed by the connector on the caller's behalf: consumed ones are
   released after use, and requests that are not waited for carry a cancelable context.
   `Replicaset.CallAsync` now returns the v3 `tarantool.Future` interface, so callers must

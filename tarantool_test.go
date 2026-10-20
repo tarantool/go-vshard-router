@@ -320,7 +320,6 @@ func BenchmarkCallSimpleInsert_GO_Call(b *testing.B) {
 		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
 		TotalBucketCount: totalBucketCount,
 		User:             username,
-		RequestTimeout:   time.Minute,
 	})
 	require.NoError(b, err)
 
