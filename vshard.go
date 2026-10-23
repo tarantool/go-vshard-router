@@ -347,53 +347,63 @@ func (r *Router) BucketCount() uint64 {
 // -- Bootstrap
 // --------------------------------------------------------------------------------
 
-// ClusterBootstrap initializes the cluster by bootstrapping the necessary buckets
-// across the available replicasets. It checks the current state of each replicaset
-// and creates buckets if required. The function takes a context for managing
-// cancellation and deadlines, and a boolean parameter ifNotBootstrapped to control
-// error handling. If ifNotBootstrapped is true, the function will log any errors
-// encountered during the bootstrapping process but will not halt execution; instead,
-// it will return the last error encountered. If ifNotBootstrapped is false, any
-// error will result in an immediate return, ensuring that the operation either
-// succeeds fully or fails fast.
-//
-// Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
+// ClusterBootstrap distributes buckets across replicasets.
+// Idempotent: if any of replicasets has buckets, the cluster is considered already bootstrapped; function
+// returns a NON_EMPTY error, or succeeds without changes when ifNotBootstrapped is true.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
 	nameToReplicasetRef := r.getNameToReplicaset()
 
-	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
+	// Check that every replicaset is empty before bootstrapping. If at least one
+	// replicaset already holds buckets, the cluster was bootstrapped before.
 	var lastErr error
 
-	for _, rs := range nameToReplicasetRef {
-		rssToBootstrap = append(rssToBootstrap, *rs)
-	}
-
-	err := CalculateEtalonBalance(rssToBootstrap, r.cfg.TotalBucketCount)
-	if err != nil {
-		return err
-	}
-
-	bucketID := uint64(1)
-	for id, rs := range rssToBootstrap {
-		if rs.EtalonBucketCount > 0 {
-			err = rs.BucketForceCreate(ctx, bucketID, rs.EtalonBucketCount)
-			if err != nil {
-				if ifNotBootstrapped {
-					lastErr = err
-				} else {
-					return err
-				}
+	for name, rs := range nameToReplicasetRef {
+		count, err := rs.BucketsCount(ctx)
+		if err != nil {
+			if ifNotBootstrapped {
+				lastErr = fmt.Errorf("buckets_count on replicaset %s: %w", name, err)
 			} else {
-				nextBucketID := bucketID + rs.EtalonBucketCount
-				r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, id)
-				bucketID = nextBucketID
+				return fmt.Errorf("buckets_count on replicaset %s: %w", name, err)
 			}
+		} else if count > 0 {
+			if ifNotBootstrapped {
+				r.log().Infof(ctx, "cluster bootstrap skipped: replicaset %s has buckets", name)
+
+				return nil
+			}
+
+			return newVShardErrorNonEmpty()
 		}
 	}
 
 	if lastErr != nil {
 		return lastErr
 	}
+
+	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
+
+	for _, rs := range nameToReplicasetRef {
+		rssToBootstrap = append(rssToBootstrap, *rs)
+	}
+
+	if err := CalculateEtalonBalance(rssToBootstrap, r.cfg.TotalBucketCount); err != nil {
+		return err
+	}
+
+	bucketID := uint64(1)
+	for _, rs := range rssToBootstrap {
+		if rs.EtalonBucketCount > 0 {
+			if err := rs.BucketForceCreate(ctx, bucketID, rs.EtalonBucketCount); err != nil {
+				return err
+			}
+
+			nextBucketID := bucketID + rs.EtalonBucketCount
+			r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, rs.String())
+			bucketID = nextBucketID
+		}
+	}
+
+	r.log().Infof(ctx, "cluster bootstrap completed")
 
 	return nil
 }
