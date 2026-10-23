@@ -1,6 +1,7 @@
 ## Unreleased
 
 CHANGES:
+* Router.ClusterBootstrap: align with lua vshard.router.bootstrap: check vshard.storage.buckets_count and return NON_EMPTY when already bootstrapped (or skip when ifNotBootstrapped is true).
 * Slog provider moved to providers directory.
 * More strict check of vshard.storage.call response.
 * Bump go-tarantool from v2.3.0 to v2.3.1.
