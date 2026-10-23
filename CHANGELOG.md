@@ -1,6 +1,7 @@
 ## Unreleased
 
 CHANGES:
+* Router.ClusterBootstrap: align with lua vshard.router.bootstrap: check vshard.storage.buckets_count and return NON_EMPTY when already bootstrapped (or skip when ifNotBootstrapped is true).
 * Bump go-tarantool from v2.4.2 to v3.0.2.
 * Logging goes through `*slog.Logger`: `Config.Logger` replaces `Config.Loggerf`, and the
   `LogfProvider` interface, `StdoutLoggerf` and the `providers/slog` adapter are removed.
