@@ -7,6 +7,11 @@ FEATURES:
   while the default dense cache and `TotalBucketCount` cardinality are preserved.
 
 CHANGES:
+* `Router.ClusterBootstrap` is no longer deprecated and follows `vshard.router.bootstrap`:
+  it calls `vshard.storage.buckets_count` on every replicaset first and returns a `NON_EMPTY`
+  error if any of them already holds buckets, or does nothing when `ifNotBootstrapped` is
+  true. Buckets are distributed over replicasets sorted by name, so the result no longer
+  depends on map iteration order (#17).
 * Bump go-tarantool from v2.4.2 to v3.0.2.
 * Logging goes through `*slog.Logger`: `Config.Logger` replaces `Config.Loggerf`, and the
   `LogfProvider` interface, `StdoutLoggerf` and the `providers/slog` adapter are removed.

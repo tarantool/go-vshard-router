@@ -101,3 +101,12 @@ func newVShardErrorNoRouteToBucket(bucketID uint64) error {
 		Message:  fmt.Sprintf("Bucket %d cannot be found. Is rebalancing in progress?", bucketID),
 	}
 }
+
+func newVShardErrorNonEmpty() error {
+	return &StorageCallVShardError{
+		Name:    VShardErrNameNonEmpty,
+		Code:    VShardErrCodeNonEmpty,
+		Type:    "ShardingError",
+		Message: "Cluster is already bootstrapped",
+	}
+}
