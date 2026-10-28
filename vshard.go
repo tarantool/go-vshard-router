@@ -51,8 +51,14 @@ func (r *Router) metrics() MetricsProvider {
 	return r.cfg.Metrics
 }
 
-func (r *Router) log() LogfProvider {
-	return r.cfg.Loggerf
+func (r *Router) log() *slog.Logger {
+	// NewRouter always sets a logger via prepareCfg, but a Router built by hand
+	// (as tests do) would otherwise panic on the first log call.
+	if r.cfg.Logger == nil {
+		return discardLogger
+	}
+
+	return r.cfg.Logger
 }
 
 func (r *Router) getRouteMap() routeMap {
@@ -66,8 +72,10 @@ func (r *Router) setRouteMap(routeMap routeMap) {
 
 type Config struct {
 	// Providers
-	// Loggerf injects a custom logger. By default there is no logger is used.
-	Loggerf          LogfProvider     // Loggerf is not required
+	// Logger injects a logger. By default logs are discarded.
+	// It is passed to the connection pools as well, so router and connector
+	// events share one destination.
+	Logger           *slog.Logger     // Logger is not required
 	Metrics          MetricsProvider  // Metrics is not required
 	TopologyProvider TopologyProvider // TopologyProvider is required provider
 
@@ -87,7 +95,19 @@ type Config struct {
 	TotalBucketCount uint64
 	User             string
 	Password         string
-	PoolOpts         tarantool.Opts
+
+	// ConnOpts configures each storage connection inside a replicaset pool.
+	// Only the settings the v3 pool leaves to the connection are exposed here:
+	// reconnection and per-connection events are the pool's business, and
+	// logging goes through Logger, so Reconnect, MaxReconnects, Notify and
+	// Logger are deliberately absent rather than silently ignored.
+	ConnTimeout      time.Duration
+	ConnRateLimit    uint
+	ConnRLimitAction tarantool.RLimitAction
+	ConnConcurrency  uint32
+	ConnSkipSchema   bool
+	ConnHandle       any
+	ConnAllocator    tarantool.Allocator
 }
 
 type BucketStatInfo struct {
@@ -189,7 +209,7 @@ func (ii InstanceInfo) Validate() error {
 func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 	var err error
 
-	cfg, err = prepareCfg(ctx, cfg)
+	cfg, err = prepareCfg(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -202,14 +222,14 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 	err = cfg.TopologyProvider.Init(router.Topology())
 	if err != nil {
-		router.log().Errorf(ctx, "Can't create new topology provider with err: %s", err)
+		router.log().ErrorContext(ctx, "Can't create new topology provider", "error", err)
 
 		return nil, fmt.Errorf("%w; cant init topology with err: %w", ErrTopologyProvider, err)
 	}
 
 	err = router.DiscoveryAllBuckets(ctx)
 	if err != nil {
-		router.log().Errorf(ctx, "router.DiscoveryAllBuckets failed: %v", err)
+		router.log().ErrorContext(ctx, "router.DiscoveryAllBuckets failed", "error", err)
 	}
 
 	if cfg.DiscoveryMode == DiscoveryModeOn {
@@ -260,7 +280,7 @@ func (r *Router) setEmptyRouteMap() {
 	r.setRouteMap(routeMap)
 }
 
-func prepareCfg(ctx context.Context, cfg Config) (Config, error) {
+func prepareCfg(cfg Config) (Config, error) {
 	const discoveryTimeoutDefault = 1 * time.Minute
 	const discoveryWorkStepDefault = 10 * time.Millisecond
 
@@ -273,11 +293,8 @@ func prepareCfg(ctx context.Context, cfg Config) (Config, error) {
 		cfg.DiscoveryTimeout = discoveryTimeoutDefault
 	}
 
-	if cfg.Loggerf == nil {
-		cfg.Loggerf = emptyLogfProvider
-		cfg.PoolOpts.Logger = nil
-	} else {
-		cfg.PoolOpts.Logger = slog.New(tarantoolLogHandler{loggerf: cfg.Loggerf, ctx: ctx})
+	if cfg.Logger == nil {
+		cfg.Logger = discardLogger
 	}
 
 	if cfg.Metrics == nil {
@@ -300,20 +317,9 @@ func validateCfg(cfg Config) error {
 		return fmt.Errorf("bucket count must be greater than 0")
 	}
 
-	// The v3 pool manages reconnection itself and rejects these per instance,
-	// which would otherwise surface as an opaque error from the first
-	// AddReplicaset call instead of a configuration error at startup.
-	if cfg.PoolOpts.Reconnect != 0 {
-		return fmt.Errorf("config PoolOpts.Reconnect: must not be set, the v3 pool reconnects on its own")
-	}
-
-	if cfg.PoolOpts.MaxReconnects != 0 {
-		return fmt.Errorf("config PoolOpts.MaxReconnects: must not be set, the v3 pool reconnects on its own")
-	}
-
-	if cfg.PoolOpts.Notify != nil {
-		return fmt.Errorf("config PoolOpts.Notify: must not be set, the v3 pool owns connection events")
-	}
+	// The v3 pool manages reconnection itself and rejects Reconnect,
+	// MaxReconnects and Notify per instance. Config does not expose them, so
+	// there is nothing to validate here.
 
 	return nil
 }
@@ -387,7 +393,7 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 				}
 			} else {
 				nextBucketID := bucketID + rs.EtalonBucketCount
-				r.log().Infof(ctx, "Buckets from %d to %d are bootstrapped on \"%s\"", bucketID, nextBucketID-1, rs.info.Name)
+				r.log().InfoContext(ctx, "Buckets bootstrapped", "from", bucketID, "to", nextBucketID-1, "replicaset", rs.info.Name)
 				bucketID = nextBucketID
 			}
 		}

@@ -24,7 +24,6 @@ func TestController_AddInstance(t *testing.T) {
 	t.Run("no such replicaset", func(t *testing.T) {
 		router := Router{
 			cfg: Config{
-				Loggerf: emptyLogfProvider,
 			},
 		}
 		router.setEmptyNameToReplicaset()
@@ -39,7 +38,6 @@ func TestController_AddInstance(t *testing.T) {
 	t.Run("invalid instance info", func(t *testing.T) {
 		router := Router{
 			cfg: Config{
-				Loggerf: emptyLogfProvider,
 			},
 		}
 		router.setEmptyNameToReplicaset()
@@ -55,7 +53,6 @@ func TestController_RemoveInstance_NoSuchReplicaset(t *testing.T) {
 
 	router := Router{
 		cfg: Config{
-			Loggerf: emptyLogfProvider,
 		},
 	}
 	router.setEmptyNameToReplicaset()
@@ -82,7 +79,6 @@ func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
 
 	router := Router{
 		cfg: Config{
-			Loggerf: emptyLogfProvider,
 		},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
@@ -107,7 +103,6 @@ func TestController_RemoveReplicaset(t *testing.T) {
 
 	router := Router{
 		cfg: Config{
-			Loggerf: emptyLogfProvider,
 		},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
@@ -152,7 +147,7 @@ func TestController_RemoveReplicasetKeepsPerConnectionErrors(t *testing.T) {
 			mPool := mockpool.NewPooler(t)
 			mPool.On("CloseGraceful").Return(tc.closeErr)
 
-			router := Router{cfg: Config{Loggerf: emptyLogfProvider}}
+			router := Router{cfg: Config{}}
 			_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
 				rsName: {conn: mPool},
 			})
@@ -175,7 +170,6 @@ func TestRouter_AddReplicaset_AlreadyExists(t *testing.T) {
 
 	router := Router{
 		cfg: Config{
-			Loggerf: emptyLogfProvider,
 		},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
@@ -196,7 +190,6 @@ func TestRouter_AddReplicaset_InvalidReplicaset(t *testing.T) {
 
 	router := Router{
 		cfg: Config{
-			Loggerf: emptyLogfProvider,
 		},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{

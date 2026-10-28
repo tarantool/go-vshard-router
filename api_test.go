@@ -20,7 +20,6 @@ func TestRouter_RouterRouteAll(t *testing.T) {
 	var emptyRouter = &Router{
 		cfg: Config{
 			TotalBucketCount: uint64(10),
-			Loggerf:          emptyLogfProvider,
 			Metrics:          emptyMetricsProvider,
 		},
 	}

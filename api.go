@@ -283,7 +283,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 		if spent := time.Since(requestStartTime); spent > timeout {
 			r.metrics().RequestDuration(spent, fnc, false, false)
 
-			r.log().Debugf(ctx, "Return result on timeout; spent %s of timeout %s", spent, timeout)
+			r.log().DebugContext(ctx, "Return result on timeout", "spent", spent, "timeout", timeout)
 			if err == nil {
 				err = fmt.Errorf("cant get call cause call impl timeout")
 			}
@@ -309,7 +309,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			continue
 		}
 
-		r.log().Infof(ctx, "Try call %s on replicaset %s for bucket %d", fnc, rs.info.Name, bucketID)
+		r.log().InfoContext(ctx, "Try call on replicaset", "function", fnc, "replicaset", rs.info.Name, "bucket_id", bucketID)
 
 		storageCallResponse := vshardStorageCallResponseProto{}
 
@@ -320,7 +320,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 			return VshardRouterCallResp{}, fmt.Errorf("got error on future.GetTyped(): %w", err)
 		}
 
-		r.log().Debugf(ctx, "Got call result response data %+v", storageCallResponse)
+		r.log().DebugContext(ctx, "Got call result response data", "response", storageCallResponse)
 
 		if storageCallResponse.AssertError != nil {
 			return VshardRouterCallResp{}, fmt.Errorf("%s: %s failed: %+v", vshardStorageClientCall, fnc, storageCallResponse.AssertError)
@@ -365,12 +365,12 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 							if err == nil {
 								break // breaks loop
 							}
-							r.log().Warnf(ctx, "Failed set bucket %d to %v (possible race): %v", bucketID, destinationName, err)
+							r.log().WarnContext(ctx, "Failed set bucket to destination (possible race)", "bucket_id", bucketID, "destination", destinationName, "error", err)
 						}
 
 						if !loggedOnce {
-							r.log().Warnf(ctx, "Replicaset '%v' was not found, but received from storage as destination - please "+
-								"update configuration", destinationName)
+							r.log().WarnContext(ctx, "Replicaset was not found, but received from storage as destination - "+
+								"please update configuration", "destination", destinationName)
 							loggedOnce = true
 						}
 
@@ -387,7 +387,7 @@ func (r *Router) Call(ctx context.Context, bucketID uint64, mode CallMode,
 
 				r.metrics().RetryOnCall("bucket_migrate")
 
-				r.log().Debugf(ctx, "Retrying fnc '%s' cause got vshard error: %v", fnc, vshardError)
+				r.log().DebugContext(ctx, "Retrying cause got vshard error", "function", fnc, "error", vshardError)
 
 				// this vshardError will be returned to a caller in case of timeout
 				err = vshardError

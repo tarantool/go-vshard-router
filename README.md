@@ -118,13 +118,10 @@ func main() {
       },
     }),
     TotalBucketCount: 128000,
-    // PoolOpts are connection options for every replicaset pool.
-    // Note: go-tarantool v3 rejects Reconnect, MaxReconnects and Notify here —
-    // the pool manages reconnection itself and NewWithOpts returns an error
-    // when they are set. Use Loggerf in Config for logging.
-    PoolOpts: tarantool.Opts{
-      Timeout: time.Second,
-    },
+    // Conn* options are applied to every storage connection.
+    // Reconnection and connection events belong to the pool, and logging goes
+    // through Logger, so tarantool.Opts is not exposed here wholesale.
+    ConnTimeout: time.Second,
   })
   if err != nil {
     panic(err)
@@ -203,8 +200,8 @@ The following providers are currently available:
 
 #### Logs
 
-- stdout (builtin)
-- **[slog](providers/slog)**
+Logging goes through `*slog.Logger`: set `Config.Logger`, and the same logger
+reaches the connection pools. Nothing is logged by default.
 
 ### Learn more examples
 #### Quick Start
