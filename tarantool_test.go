@@ -430,6 +430,7 @@ func BenchmarkCallSimpleInsert_Lua(b *testing.B) {
 
 		feature := p.Do(req, pool.ModeAny)
 		faces, err := feature.Get()
+		feature.Release()
 
 		require.NoError(b, err)
 		require.NotNil(b, faces)
@@ -498,6 +499,7 @@ func BenchmarkCallSimpleSelect_Lua(b *testing.B) {
 		feature := p.Do(req, pool.ModeAny)
 		var product Product
 		err = feature.GetTyped(&[]any{&product})
+		feature.Release()
 
 		b.StopTimer()
 		require.NoError(b, err)
@@ -778,6 +780,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 		err = future.GetTyped(&typed)
 		require.Nilf(t, err, "GetTyped finished with no err for argLen %d", argLen)
 		require.Equal(t, args, typed, "GetTyped resp ok for argLen %d", argLen)
+		future.Release()
 	}
 
 	// Test for async execution
@@ -792,6 +795,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 	errs := make([]error, len(futures))
 	for i, future := range futures {
 		_, errs[i] = future.Get()
+		future.Release()
 	}
 	for i, err := range errs {
 		require.Nil(t, err, "future[%d].Get finished with no err for async test", i)
@@ -804,6 +808,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 	// Test no timeout by default
 	future = rs.CallAsync(ctx, callOpts, "sleep", []any{1})
 	_, err = future.Get()
+	future.Release()
 	require.Nil(t, err, "CallAsync no timeout by default")
 
 	// Test for timeout via ctx
@@ -811,6 +816,7 @@ func TestReplicsetCallAsync(t *testing.T) {
 	defer cancel()
 	future = rs.CallAsync(ctxTimeout, callOpts, "sleep", []any{1})
 	_, err = future.Get()
+	future.Release()
 	require.NotNil(t, err, "CallAsync timeout by context does work")
 
 	// Test for timeout via config
@@ -820,14 +826,17 @@ func TestReplicsetCallAsync(t *testing.T) {
 	}
 	future = rs.CallAsync(ctx, callOptsTimeout, "sleep", []any{1})
 	_, err = future.Get()
+	future.Release()
 	require.NotNil(t, err, "CallAsync timeout by callOpts does work")
 
 	future = rs.CallAsync(ctx, callOpts, "raise_luajit_error", nil)
 	_, err = future.Get()
+	future.Release()
 	require.NotNil(t, err, "raise_luajit_error returns error")
 
 	future = rs.CallAsync(ctx, callOpts, "raise_client_error", nil)
 	_, err = future.Get()
+	future.Release()
 	require.NotNil(t, err, "raise_client_error returns error")
 }
 
