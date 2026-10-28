@@ -124,4 +124,3 @@ func TestInstanceInfo_Validate(t *testing.T) {
 		})
 	}
 }
-

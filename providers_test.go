@@ -30,4 +30,3 @@ func TestEmptyMetrics_CronDiscoveryEvent(t *testing.T) {
 		emptyMetrics.CronDiscoveryEvent(false, time.Second, "")
 	})
 }
-
