@@ -109,7 +109,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 			}
 		}
 	}()
-	defer searchCancel() // cancel first, so no waiter waits on a live request
+	defer searchCancel() // Cancel first, so no waiter waits on a live request.
 
 	// Send a bunch of parallel requests
 	for rsName, rs := range nameToReplicasetRef {
@@ -183,7 +183,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 			}
 		}
 	}()
-	defer searchCancel() // cancel first, so no waiter waits on a live request
+	defer searchCancel() // Cancel first, so no waiter waits on a live request.
 
 	// Send a bunch of parallel requests
 	for rsName, rs := range nameToReplicasetRef {

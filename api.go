@@ -591,9 +591,9 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 
 	nameToReplicasetRef := r.getNameToReplicaset()
 
-	//nolint:contextcheck // the map-call context is already canceled here
+	//nolint:contextcheck // The map-call context is already canceled here.
 	defer func() {
-		// call function "storage_unref" if map_callrw is failed or successed.
+		// Call function "storage_unref" if map_callrw is failed or successed.
 		// A future with no context is only reaped by the connection's own
 		// Timeout, which is off by default.
 		unrefCtx, unrefCancel := context.WithTimeout(context.Background(), timeout)
