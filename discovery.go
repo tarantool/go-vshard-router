@@ -72,7 +72,7 @@ func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error
 	}
 
 	// it`s ok if in the same time we have few active searches
-	r.log().Infof(ctx, "Discovering bucket %d", bucketID)
+	r.log().InfoContext(ctx, "Discovering bucket", "bucket_id", bucketID)
 
 	if r.cfg.BucketsSearchMode == BucketsSearchLegacy {
 		return r.bucketSearchLegacy(ctx, bucketID)
@@ -125,7 +125,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 		if err != nil {
 			var vshardError StorageCallVShardError
 			if !errors.As(err, &vshardError) {
-				r.log().Errorf(ctx, "bucketSearchLegacy: bucketStatWait call error for %v: %v", rsFuture.rsName, err)
+				r.log().ErrorContext(ctx, "bucketSearchLegacy: bucketStatWait call error", "replicaset", rsFuture.rsName, "error", err)
 			}
 			// just skip, bucket may not belong to this replicaset
 			continue
@@ -134,7 +134,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 		// It's ok if several replicasets return ok to bucket_stat command for the same bucketID, just pick any of them.
 		rs, err := r.BucketSet(bucketID, rsFuture.rsName)
 		if err != nil {
-			r.log().Errorf(ctx, "bucketSearchLegacy: can't set rsID %v for bucketID %d: %v", rsFuture.rsName, bucketID, err)
+			r.log().ErrorContext(ctx, "bucketSearchLegacy: can't set bucket route", "replicaset", rsFuture.rsName, "bucket_id", bucketID, "error", err)
 			return nil, newVShardErrorNoRouteToBucket(bucketID)
 		}
 
@@ -200,7 +200,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 		resp, err := bucketsDiscoveryWait(rsFuture.future)
 		rsFutures[i].future = nil
 		if err != nil {
-			r.log().Errorf(ctx, "bucketSearchBatched: bucketsDiscoveryWait error for %v: %v", rsFuture.rsName, err)
+			r.log().ErrorContext(ctx, "bucketSearchBatched: bucketsDiscoveryWait error", "replicaset", rsFuture.rsName, "error", err)
 			// just skip, we still may find our bucket in another replicaset
 			continue
 		}
@@ -270,23 +270,23 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 
 		if removedFromRsName == "" {
 			// newRsName cannot be an empty string here due to the previous for-loop above.
-			r.log().Debugf(ctx, "Added new %d buckets to the cluster map", removedFromCount)
+			r.log().DebugContext(ctx, "Added new buckets to the cluster map", "count", removedFromCount)
 		} else {
-			r.log().Debugf(ctx, "Removed %d buckets from replicaset '%s'", removedFromCount, removedFromRsName)
+			r.log().DebugContext(ctx, "Removed buckets from replicaset", "count", removedFromCount, "replicaset", removedFromRsName)
 		}
 	}
 
 	if newRsName == "" {
-		r.log().Infof(ctx, "Removed %d buckets from the cluster map", addedToNewRsTotal)
+		r.log().InfoContext(ctx, "Removed buckets from the cluster map", "count", addedToNewRsTotal)
 	} else {
-		r.log().Infof(ctx, "Added %d buckets to replicaset '%s'", addedToNewRsTotal, newRsName)
+		r.log().InfoContext(ctx, "Added buckets to replicaset", "count", addedToNewRsTotal, "replicaset", newRsName)
 	}
 }
 
 func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 	t := time.Now()
 
-	r.log().Infof(ctx, "Start discovery all buckets")
+	r.log().InfoContext(ctx, "Start discovery all buckets")
 
 	var errGr errgroup.Group
 
@@ -302,14 +302,14 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 			for {
 				resp, err := rs.bucketsDiscovery(ctx, bucketsDiscoveryPaginationFrom)
 				if err != nil {
-					r.log().Errorf(ctx, "Can't bucketsDiscovery for rs %s: %v", rs.info, err)
+					r.log().ErrorContext(ctx, "Can't bucketsDiscovery for replicaset", "replicaset", rs.info, "error", err)
 					return err
 				}
 
 				for _, bucketID := range resp.Buckets {
 					if bucketID > r.cfg.TotalBucketCount {
-						r.log().Errorf(ctx, "Ignoring got bucketID is out of range: %d (length %d)",
-							bucketID, r.cfg.TotalBucketCount)
+						r.log().ErrorContext(ctx, "Ignoring got bucketID is out of range",
+							"bucket_id", bucketID, "total_bucket_count", r.cfg.TotalBucketCount)
 						continue
 					}
 
@@ -337,7 +337,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("errGr.Wait() err: %w", err)
 	}
-	r.log().Infof(ctx, "Discovery done since: %s", time.Since(t))
+	r.log().InfoContext(ctx, "Discovery done", "duration", time.Since(t))
 
 	return nil
 }
@@ -350,7 +350,7 @@ func (r *Router) cronDiscovery(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			r.metrics().CronDiscoveryEvent(false, 0, "ctx-cancel")
-			r.log().Infof(ctx, "[DISCOVERY] cron discovery has been stopped after %d iterations", iterationCount)
+			r.log().InfoContext(ctx, "[DISCOVERY] cron discovery has been stopped", "iterations", iterationCount)
 			return
 		case <-time.After(r.cfg.DiscoveryTimeout):
 			iterationCount++
@@ -372,23 +372,23 @@ func (r *Router) cronDiscovery(ctx context.Context) {
 					debugStack := string(debug.Stack())
 
 					go func() {
-						r.log().Errorf(ctx, "[DISCOVERY] something unexpected has happened in cronDiscovery(%d): panic %v, stacktrace: %s",
-							iterationCount, recovered, debugStack)
+						r.log().ErrorContext(ctx, "[DISCOVERY] something unexpected has happened in cronDiscovery",
+							"iteration", iterationCount, "panic", recovered, "stacktrace", debugStack)
 					}()
 				}
 			}()
 
-			r.log().Infof(ctx, "[DISCOVERY] started cron discovery iteration %d", iterationCount)
+			r.log().InfoContext(ctx, "[DISCOVERY] started cron discovery iteration", "iteration", iterationCount)
 
 			tStartDiscovery := time.Now()
 
 			if err := r.DiscoveryAllBuckets(ctx); err != nil {
 				r.metrics().CronDiscoveryEvent(false, time.Since(tStartDiscovery), "discovery-error")
-				r.log().Errorf(ctx, "[DISCOVERY] cant do cron discovery iteration %d with error: %s", iterationCount, err)
+				r.log().ErrorContext(ctx, "[DISCOVERY] cant do cron discovery iteration", "iteration", iterationCount, "error", err)
 				return
 			}
 
-			r.log().Infof(ctx, "[DISCOVERY] finished cron discovery iteration %d", iterationCount)
+			r.log().InfoContext(ctx, "[DISCOVERY] finished cron discovery iteration", "iteration", iterationCount)
 
 			r.metrics().CronDiscoveryEvent(true, time.Since(tStartDiscovery), "ok")
 		}()

@@ -58,7 +58,7 @@ func (r *Router) Topology() TopologyController {
 }
 
 func (r *Router) AddInstance(ctx context.Context, rsName string, info InstanceInfo) error {
-	r.log().Debugf(ctx, "Trying to add instance %s to router topology in rs %s", info, rsName)
+	r.log().DebugContext(ctx, "Trying to add instance to router topology", "instance", info, "replicaset", rsName)
 
 	err := info.Validate()
 	if err != nil {
@@ -77,7 +77,7 @@ func (r *Router) AddInstance(ctx context.Context, rsName string, info InstanceIn
 	instance := pool.Instance{
 		Name:   info.Name,
 		Dialer: dialer,
-		Opts:   r.cfg.PoolOpts,
+		Opts:   r.connOpts(),
 	}
 
 	nameToReplicasetRef := r.getNameToReplicaset()
@@ -95,20 +95,20 @@ func (r *Router) AddInstance(ctx context.Context, rsName string, info InstanceIn
 // If the replicaset name is empty, it searches through all replica sets to locate the instance.
 // Returns an error if the specified replicaset does not exist or if any issue occurs during removal.
 func (r *Router) RemoveInstance(ctx context.Context, rsName, instanceName string) error {
-	r.log().Debugf(ctx, "Trying to remove instance %s from router topology in rs %s", instanceName, rsName)
+	r.log().DebugContext(ctx, "Trying to remove instance from router topology", "instance", instanceName, "replicaset", rsName)
 
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	var rs *Replicaset
 
 	if rsName == "" {
-		r.log().Debugf(ctx, "Replicaset name is not provided for instance %s, attempting to find it",
-			instanceName)
+		r.log().DebugContext(ctx, "Replicaset name is not provided, attempting to find it",
+			"instance", instanceName)
 
 		for _, trs := range nameToReplicasetRef {
 			_, exists := trs.conn.Info()[instanceName]
 			if exists {
-				r.log().Debugf(ctx, "Replicaset found for instance %s, removing it", instanceName)
+				r.log().DebugContext(ctx, "Replicaset found, removing instance", "instance", instanceName)
 
 				rs = trs
 			}
@@ -124,18 +124,34 @@ func (r *Router) RemoveInstance(ctx context.Context, rsName, instanceName string
 	return rs.conn.Remove(instanceName)
 }
 
-// poolOpts builds the options for a replicaset connection pool. The pool logs
-// through pool.Opts.Logger only; CheckTimeout repeats the pool.New default
-// because NewWithOpts rejects a non-positive value.
+// connOpts builds the connection options shared by every instance. Reconnect,
+// MaxReconnects and Notify are left unset: the v3 pool owns reconnection and
+// connection events, and rejects those settings. Logger is left unset too, so
+// the pool copies its own logger into each connection (pool/pool.go:887).
+func (r *Router) connOpts() tarantool.Opts {
+	return tarantool.Opts{
+		Timeout:      r.cfg.ConnTimeout,
+		RateLimit:    r.cfg.ConnRateLimit,
+		RLimitAction: r.cfg.ConnRLimitAction,
+		Concurrency:  r.cfg.ConnConcurrency,
+		SkipSchema:   r.cfg.ConnSkipSchema,
+		Handle:       r.cfg.ConnHandle,
+		Allocator:    r.cfg.ConnAllocator,
+	}
+}
+
+// poolOpts builds the options for a replicaset connection pool. CheckTimeout
+// repeats the pool.New default because NewWithOpts rejects a non-positive
+// value; Logger is the router's, so pool-level events land with router events.
 func (r *Router) poolOpts() pool.Opts {
 	return pool.Opts{
 		CheckTimeout: 1 * time.Second,
-		Logger:       r.cfg.PoolOpts.Logger,
+		Logger:       r.cfg.Logger,
 	}
 }
 
 func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, instances []InstanceInfo) error {
-	r.log().Debugf(ctx, "Trying to add replicaset %s to router topology", rsInfo)
+	r.log().DebugContext(ctx, "Trying to add replicaset to router topology", "replicaset", rsInfo)
 
 	err := rsInfo.Validate()
 	if err != nil {
@@ -161,7 +177,7 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 		rsInstances = append(rsInstances, pool.Instance{
 			Name:   instance.Name,
 			Dialer: dialer,
-			Opts:   r.cfg.PoolOpts,
+			Opts:   r.connOpts(),
 		})
 	}
 
@@ -177,14 +193,14 @@ func (r *Router) AddReplicaset(ctx context.Context, rsInfo ReplicasetInfo, insta
 			connectStatus = "not connected"
 		}
 
-		r.log().Infof(ctx, "[replicaset %s ] instance %s %s in role %s", rsInfo, instName, connectStatus, instConnInfo.Role)
+		r.log().InfoContext(ctx, "Replicaset instance status", "replicaset", rsInfo, "instance", instName, "status", connectStatus, "role", instConnInfo.Role)
 	}
 
 	switch isConnected, err := conn.ConnectedNow(pool.ModeRW); {
 	case err != nil:
-		r.log().Errorf(ctx, "cant check rs pool conntected rw now with error: %v", err)
+		r.log().ErrorContext(ctx, "cant check rs pool connected rw now", "error", err)
 	case !isConnected:
-		r.log().Errorf(ctx, "got connected now as false to pool.ModeRW")
+		r.log().ErrorContext(ctx, "got connected now as false to pool.ModeRW")
 	}
 
 	replicaset := &Replicaset{
@@ -221,7 +237,7 @@ func (r *Router) AddReplicasets(ctx context.Context, replicasets map[ReplicasetI
 }
 
 func (r *Router) RemoveReplicaset(ctx context.Context, rsName string) []error {
-	r.log().Debugf(ctx, "Trying to remove replicaset %s from router topology", rsName)
+	r.log().DebugContext(ctx, "Trying to remove replicaset from router topology", "replicaset", rsName)
 
 	nameToReplicasetOldPtr := r.nameToReplicaset.Load()
 	rs := (*nameToReplicasetOldPtr)[rsName]

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
-	"github.com/tarantool/go-tarantool/v3"
 	vshardrouter "github.com/tarantool/go-vshard-router/v2"
 	"github.com/tarantool/go-vshard-router/v2/providers/static"
 )
@@ -40,14 +40,12 @@ func main() {
 	cfg := readCfg(os.Args[1])
 
 	vshardRouter, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
-		Loggerf:          &vshardrouter.StdoutLoggerf{},
+		Logger:           slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		DiscoveryTimeout: time.Minute,
 		DiscoveryMode:    vshardrouter.DiscoveryModeOn,
 		TopologyProvider: static.NewProvider(cfg.Storage.Topology),
 		TotalBucketCount: cfg.Storage.TotalBucketCount,
-		PoolOpts: tarantool.Opts{
-			Timeout: time.Second,
-		},
+		ConnTimeout: time.Second,
 	})
 
 	ctrl := controller{

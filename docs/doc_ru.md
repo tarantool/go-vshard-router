@@ -74,6 +74,8 @@ package main
 import (
   "context"
   "fmt"
+  "log/slog"
+  "os"
   "strconv"
   "time"
 
@@ -124,18 +126,15 @@ func main() {
     // DiscoveryModeOn - работает каждый промежуток DiscoveryTimeout.
     // DiscoveryModeOnce - дискаверит бакеты только при старте.
     DiscoveryMode: vshardrouter.DiscoveryModeOn,
-    // PoolOpts - не обязательный параметр. Дефолтные настройки можно найти в go-tarantool.
-    // PoolOpts - настройки пула подключения к репликасету.
-    // Они задаются для всех репликасетов одновременно.
-    // Внимание: go-tarantool v3 не разрешает здесь Reconnect, MaxReconnects и Notify —
-    // пул сам управляет переподключением, и pool.NewWithOpts вернёт ошибку,
-    // если эти поля заданы. Логирование задаётся через Loggerf ниже.
-    PoolOpts: tarantool.Opts{
-      Timeout: time.Second,
-    },
-    // Loggerf - не обязательный параметр. По дефолту используется empty logger, который не пишет логирование.
-    // Loggerf - интерфейс которым вы можете обернуть свой логгер или предложить готовые обертки логгеров нам в PR.
-    Loggerf: vshardrouter.StdoutLoggerf{LogLevel: vshardrouter.StdoutLogDebug},
+    // Conn* - не обязательные параметры, применяются к каждому соединению с хранилищем.
+    // Переподключением и событиями соединения управляет пул, а логирование
+    // задаётся через Logger ниже, поэтому tarantool.Opts целиком здесь не отдаётся:
+    // Reconnect, MaxReconnects, Notify и Logger в Config отсутствуют.
+    ConnTimeout: time.Second,
+    // Logger - не обязательный параметр. По дефолту логи не пишутся вообще
+    // (slog.DiscardHandler). Один и тот же логгер получает и роутер, и пулы
+    // соединений go-tarantool, так что переподключения видны в том же месте.
+    Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})),
     // Metrics - не обязательный параметр.  По дефолту используется EmptyMetrics, который не пишет метрик.
     // Metrics - интерфейс которым вы можете обернуть свою логику логирования в prometheus/graphite и другие системы.
     Metrics: &vshardrouter.EmptyMetrics{},
