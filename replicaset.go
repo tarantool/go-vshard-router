@@ -174,7 +174,7 @@ func (rs *Replicaset) CallAsync(ctx context.Context, opts ReplicasetCallOpts, fn
 	future := rs.conn.Do(req, opts.PoolMode)
 
 	if cancel != nil {
-		// Release the timer once the request finishes, without cancelling it
+		// Release the timer once the request finishes, without canceling it
 		// early: the caller owns the future and may Release it at any point,
 		// which zeroes the object and returns it to a pool. Capture the channel
 		// while the future is still ours, as go-tarantool's own

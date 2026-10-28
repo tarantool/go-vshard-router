@@ -23,8 +23,7 @@ func TestController_AddInstance(t *testing.T) {
 
 	t.Run("no such replicaset", func(t *testing.T) {
 		router := Router{
-			cfg: Config{
-			},
+			cfg: Config{},
 		}
 		router.setEmptyNameToReplicaset()
 
@@ -37,8 +36,7 @@ func TestController_AddInstance(t *testing.T) {
 
 	t.Run("invalid instance info", func(t *testing.T) {
 		router := Router{
-			cfg: Config{
-			},
+			cfg: Config{},
 		}
 		router.setEmptyNameToReplicaset()
 
@@ -52,8 +50,7 @@ func TestController_RemoveInstance_NoSuchReplicaset(t *testing.T) {
 	ctx := context.Background()
 
 	router := Router{
-		cfg: Config{
-		},
+		cfg: Config{},
 	}
 	router.setEmptyNameToReplicaset()
 
@@ -78,8 +75,7 @@ func TestController_RemoveInstance_NoReplicasetNameProvided(t *testing.T) {
 	mp.On("Remove", mock.Anything).Return(nil)
 
 	router := Router{
-		cfg: Config{
-		},
+		cfg: Config{},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
 		"replicaset_1": {
@@ -102,8 +98,7 @@ func TestController_RemoveReplicaset(t *testing.T) {
 	mPool.On("CloseGraceful").Return(nil)
 
 	router := Router{
-		cfg: Config{
-		},
+		cfg: Config{},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
 		uuidToRemove.String(): {conn: mPool},
@@ -169,8 +164,7 @@ func TestRouter_AddReplicaset_AlreadyExists(t *testing.T) {
 	alreadyExistingRsName := uuid.New().String()
 
 	router := Router{
-		cfg: Config{
-		},
+		cfg: Config{},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
 		alreadyExistingRsName: {conn: nil},
@@ -189,8 +183,7 @@ func TestRouter_AddReplicaset_InvalidReplicaset(t *testing.T) {
 	alreadyExistingRsName := uuid.New().String()
 
 	router := Router{
-		cfg: Config{
-		},
+		cfg: Config{},
 	}
 	_ = router.swapNameToReplicaset(nil, &map[string]*Replicaset{
 		alreadyExistingRsName: {conn: nil},
