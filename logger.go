@@ -20,10 +20,14 @@ type tarantoolLogHandler struct {
 var _ slog.Handler = tarantoolLogHandler{}
 
 func (h tarantoolLogHandler) Enabled(context.Context, slog.Level) bool {
-	return true // the provider owns level filtering
+	return true // The provider owns level filtering.
 }
 
 func (h tarantoolLogHandler) Handle(ctx context.Context, r slog.Record) error {
+	if h.loggerf == nil {
+		return nil
+	}
+
 	var rendered strings.Builder
 	rendered.WriteString(r.Message)
 	rendered.WriteString(h.attrs)
@@ -31,9 +35,6 @@ func (h tarantoolLogHandler) Handle(ctx context.Context, r slog.Record) error {
 		appendLogAttr(&rendered, h.group, attr)
 		return true
 	})
-	if h.loggerf == nil {
-		return nil
-	}
 
 	// Every level maps to the same one on the provider. go-tarantool reports
 	// connect, reconnect and reopen failures at Warn, and a canceled request's
@@ -50,7 +51,7 @@ func (h tarantoolLogHandler) Handle(ctx context.Context, r slog.Record) error {
 		logf = h.loggerf.Infof
 	}
 
-	//nolint:contextcheck // h.ctx is the router context captured at construction
+	//nolint:contextcheck // h.ctx is the router context captured at construction.
 	logCtx := h.ctx
 	if logCtx == nil {
 		logCtx = ctx
