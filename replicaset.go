@@ -157,20 +157,36 @@ func bucketStatWait(future tarantool.Future) (BucketStatInfo, error) {
 // CallAsync sends async request to remote storage. The returned Future must be
 // released by the caller once its response has been consumed.
 func (rs *Replicaset) CallAsync(ctx context.Context, opts ReplicasetCallOpts, fnc string, args any) tarantool.Future {
+	var cancel context.CancelFunc
+
 	if opts.Timeout > 0 {
 		// Don't set any timeout by default, parent context timeout would be inherited in this case.
-		// Don't call cancel in defer, because this we send request asynchronously,
-		// and wait for result outside from this function.
-		// suppress linter warning: lostcancel: the cancel function returned by context.WithTimeout should be called, not discarded, to avoid a context leak (govet, gosec G118)
-		//nolint:govet,gosec
-		ctx, _ = context.WithTimeout(ctx, opts.Timeout)
+		// The cancel cannot run in a defer here: the request is sent asynchronously
+		// and awaited outside of this function, and go-tarantool cancels the request
+		// from its own watchdog as soon as this context is done.
+		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
 	}
 
 	req := tarantool.NewCallRequest(fnc).
 		Context(ctx).
 		Args(args)
 
-	return rs.conn.Do(req, opts.PoolMode)
+	future := rs.conn.Do(req, opts.PoolMode)
+
+	if cancel != nil {
+		// Release the timer once the request finishes, without cancelling it
+		// early: the caller owns the future and may Release it at any point,
+		// which zeroes the object and returns it to a pool. Capture the channel
+		// while the future is still ours, as go-tarantool's own
+		// startContextWatchdog does, so the goroutine never touches it.
+		waitChan := future.WaitChan()
+		go func() {
+			<-waitChan
+			cancel()
+		}()
+	}
+
+	return future
 }
 
 func (rs *Replicaset) bucketsDiscoveryAsync(ctx context.Context, from uint64) tarantool.Future {
