@@ -47,10 +47,10 @@ cover: test ## Generate and open the HTML report for test coverage.
 
 .PHONY: install-mockery
 install-mockery:
-ifeq ($(wildcard $(MOCKERY_BIN)),)
-	$(info #Downloading mockery $(MOCKERY_TAG))
-	$(GO_CMD) install github.com/vektra/mockery/v3@$(MOCKERY_TAG)
-endif
+	@if ! $(MOCKERY_BIN) version 2>/dev/null | grep -q '$(MOCKERY_TAG)'; then \
+		echo "#Downloading mockery $(MOCKERY_TAG)"; \
+		$(GO_CMD) install github.com/vektra/mockery/v3@$(MOCKERY_TAG); \
+	fi
 
 generate/mocks: install-mockery ## Regenerate the mocks from .mockery.yml.
 	$(MOCKERY_BIN) --config .mockery.yml
