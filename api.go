@@ -624,7 +624,7 @@ func RouterMapCallRW[T any](r *Router, ctx context.Context,
 
 	storageRefReq := tarantool.NewCallRequest(vshardStorageServiceCall).
 		Context(ctx).
-		Args([]any{"storage_ref", refID, timeout})
+		Args([]any{"storage_ref", refID, timeout.Seconds()})
 
 	var rsFutures = make([]replicasetFuture, 0, len(nameToReplicasetRef))
 
