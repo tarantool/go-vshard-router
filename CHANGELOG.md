@@ -41,7 +41,8 @@ CHANGES:
 
 BUG FIXES:
 * `RouterMapCallRW` sends the storage reference timeout in seconds instead of
-  nanoseconds, so unused references left after a canceled call expire within the intended timeout.
+  nanoseconds, so unused references left after a canceled call expire within the intended
+  timeout (#90).
 * `ClusterBootstrap` logged a replicaset's slice index in place of its name.
 * Bucket discovery no longer leaks a goroutine per abandoned replicaset: both searches cancel
   the requests they stop waiting for instead of relying on the caller's context to expire.
