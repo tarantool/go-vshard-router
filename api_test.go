@@ -2,9 +2,15 @@ package vshard_router // nolint: revive
 
 import (
 	"bytes"
+	"errors"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
+	mockpool "github.com/tarantool/go-vshard-router/v2/mocks/pool"
 	"github.com/vmihailenco/msgpack/v5"
 	"github.com/vmihailenco/msgpack/v5/msgpcode"
 )
@@ -259,4 +265,40 @@ func BenchmarkVshardStorageCallResponseProto_DecodeMsgpack_Ok(b *testing.B) {
 
 	require.True(b, errCount == 0)
 	b.ReportAllocs()
+}
+
+func TestRouterMapCallRW_StorageRefTimeout(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		timeout time.Duration
+		seconds float64
+	}{
+		{name: "default", seconds: 0.5},
+		{name: "subsecond", timeout: 125 * time.Millisecond, seconds: 0.125},
+		{name: "fractional", timeout: 1500 * time.Millisecond, seconds: 1.5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stopErr := errors.New("stop after storage_ref")
+			mPool := mockpool.NewPooler(t)
+			mPool.EXPECT().Do(mock.Anything, pool.ModeRW).RunAndReturn(func(req tarantool.Request, _ pool.Mode) tarantool.Future {
+				var actual, expected bytes.Buffer
+				require.NoError(t, req.Body(nil, msgpack.NewEncoder(&actual)))
+				expectedReq := tarantool.NewCallRequest("vshard.storage._call").
+					Args([]any{"storage_ref", int64(1), tc.seconds})
+				require.NoError(t, expectedReq.Body(nil, msgpack.NewEncoder(&expected)))
+				require.Equal(t, expected.Bytes(), actual.Bytes(), "storage_ref timeout must be encoded in seconds")
+				return tarantool.NewFutureWithErr(req, stopErr)
+			}).Once()
+			mPool.EXPECT().Do(mock.Anything, pool.ModeRW).RunAndReturn(func(req tarantool.Request, _ pool.Mode) tarantool.Future {
+				return tarantool.NewFutureWithErr(req, stopErr)
+			}).Once()
+
+			router := &Router{cfg: Config{TotalBucketCount: 1}}
+			require.NoError(t, router.swapNameToReplicaset(nil, &map[string]*Replicaset{"storage": {conn: mPool}}))
+			_, err := RouterMapCallRW[any](router, t.Context(), "echo", []any{}, RouterMapCallRWOptions{Timeout: tc.timeout})
+			require.ErrorContains(t, err, stopErr.Error())
+		})
+	}
 }
