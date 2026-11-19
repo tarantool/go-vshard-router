@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	sparseBucketA uint64 = 1<<35 + 7
-	sparseBucketB uint64 = 1<<36 + 7
+	sparseBucketA   uint64 = 1<<35 + 7
+	sparseBucketB   uint64 = 1<<36 + 7
+	sparseBucketMax uint64 = 99_999_999_999_999
 )
 
 func newBucketTestRouter(t testing.TB, sparse bool, replicasets ...*Replicaset) *Router {
@@ -131,7 +132,7 @@ func TestSparseBucketCache(t *testing.T) {
 	// Removing an absent key and a previously removed key must not leave a
 	// typed nil that later discovery mistakes for a live replicaset.
 	router.BucketReset(sparseBucketA)
-	router.BucketReset(^uint64(0))
+	router.BucketReset(sparseBucketMax)
 	router.DiscoveryHandleBuckets(ctx, nil, []uint64{sparseBucketB})
 	actual, err = router.Route(ctx, sparseBucketB)
 	require.Error(t, err)
@@ -156,25 +157,28 @@ func TestSparseBucketBounds(t *testing.T) {
 			rs := &Replicaset{info: ReplicasetInfo{Name: "storage"}}
 			router := newBucketTestRouter(t, sparse, rs)
 			ctx := context.Background()
-			invalid := []uint64{0}
+			invalid := []uint64{0, sparseBucketMax + 1, ^uint64(0)}
+			maxID := sparseBucketMax
 			if !sparse {
-				invalid = append(invalid, 3, sparseBucketA, ^uint64(0))
+				invalid = append(invalid, 3, sparseBucketA)
+				maxID = router.BucketCount()
 			}
 			for _, id := range invalid {
+				wantErr := fmt.Sprintf("bucket id is out of range: %d (valid range 1..%d)", id, maxID)
 				_, err := router.Route(ctx, id)
-				require.ErrorContains(t, err, "out of range")
+				require.EqualError(t, err, wantErr)
 				_, err = router.Call(ctx, id, CallModeRW, "echo", nil, CallOpts{})
-				require.ErrorContains(t, err, "out of range")
+				require.EqualError(t, err, wantErr)
 				_, err = router.BucketSet(id, rs.info.Name)
-				require.ErrorContains(t, err, "out of range")
+				require.EqualError(t, err, wantErr)
 				router.BucketReset(id)
+				require.PanicsWithValue(t, wantErr, func() {
+					router.DiscoveryHandleBuckets(ctx, rs, []uint64{id})
+				})
 			}
-			require.Panics(t, func() {
-				router.DiscoveryHandleBuckets(ctx, rs, invalid)
-			})
 			valid := []uint64{1, 2}
 			if sparse {
-				valid = append(valid, sparseBucketA, ^uint64(0))
+				valid = append(valid, sparseBucketA, sparseBucketMax)
 			}
 			for _, id := range valid {
 				_, err := router.BucketSet(id, rs.info.Name)
@@ -211,21 +215,24 @@ func TestSparseBucketDiscoveryAll(t *testing.T) {
 					t.Errorf("initial pagination from: %d", pagination.From)
 				}
 				return bucketTestResponse(t, req, []any{bucketsDiscoveryResp{
-					Buckets: []uint64{0, sparseBucketA}, NextFrom: sparseBucketB,
+					Buckets: []uint64{0, sparseBucketA, sparseBucketMax + 1, ^uint64(0)}, NextFrom: sparseBucketB,
 				}})
 			}
 			if pagination.From != sparseBucketB {
 				t.Errorf("next page lost the physical bucket id: %d", pagination.From)
 			}
-			return bucketTestResponse(t, req, []any{bucketsDiscoveryResp{Buckets: []uint64{sparseBucketB}}})
+			return bucketTestResponse(t, req, []any{bucketsDiscoveryResp{Buckets: []uint64{sparseBucketB, sparseBucketMax}}})
 		}).Twice()
 	rs := &Replicaset{info: ReplicasetInfo{Name: "storage"}, conn: mp}
 	router := newBucketTestRouter(t, true, rs)
 	require.NoError(t, router.DiscoveryAllBuckets(context.Background()))
-	for _, id := range []uint64{sparseBucketA, sparseBucketB} {
+	for _, id := range []uint64{sparseBucketA, sparseBucketB, sparseBucketMax} {
 		actual, err := router.Route(context.Background(), id)
 		require.NoError(t, err)
 		require.Same(t, rs, actual)
+	}
+	for _, id := range []uint64{0, sparseBucketMax + 1, ^uint64(0)} {
+		require.Nil(t, router.getRouteMap().load(id), "discovery must not cache invalid bucket IDs")
 	}
 }
 
@@ -237,22 +244,27 @@ func TestSparseBucketDiscoverySearch(t *testing.T) {
 			mp.On("Do", mock.Anything, mock.Anything).Return(
 				func(req tarantool.Request, _ pool.Mode) tarantool.Future {
 					if mode == BucketsSearchLegacy {
-						expectBucketTestID(t, req, "vshard.storage.bucket_stat", sparseBucketA)
+						expectBucketTestID(t, req, "vshard.storage.bucket_stat", sparseBucketMax)
 						return bucketTestResponse(t, req, []any{map[string]any{
-							"id": sparseBucketA, "status": "active",
+							"id": sparseBucketMax, "status": "active",
 						}})
 					}
-					return bucketTestResponse(t, req, []any{bucketsDiscoveryResp{Buckets: []uint64{0, sparseBucketA}}})
+					return bucketTestResponse(t, req, []any{bucketsDiscoveryResp{
+						Buckets: []uint64{0, sparseBucketMax, sparseBucketMax + 1, ^uint64(0)},
+					}})
 				}).Once()
 			rs := &Replicaset{info: ReplicasetInfo{Name: "storage"}, conn: mp}
 			router := newBucketTestRouter(t, true, rs)
 			router.cfg.BucketsSearchMode = mode
 			_, err := router.BucketSet(sparseBucketB, rs.info.Name)
 			require.NoError(t, err)
-			for _, id := range []uint64{sparseBucketA, sparseBucketB} {
+			for _, id := range []uint64{sparseBucketMax, sparseBucketB} {
 				actual, err := router.Route(context.Background(), id)
 				require.NoError(t, err)
 				require.Same(t, rs, actual)
+			}
+			for _, id := range []uint64{0, sparseBucketMax + 1, ^uint64(0)} {
+				require.Nil(t, router.getRouteMap().load(id), "discovery must not cache invalid bucket IDs")
 			}
 		})
 	}
