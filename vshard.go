@@ -25,8 +25,6 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
-type routeMap = []atomic.Pointer[Replicaset]
-
 type Router struct {
 	cfg Config
 
@@ -61,13 +59,12 @@ func (r *Router) log() *slog.Logger {
 	return r.cfg.Logger
 }
 
-func (r *Router) getRouteMap() routeMap {
-	ptr := r.routeMap.Load()
-	return *ptr
+func (r *Router) getRouteMap() *routeMap {
+	return r.routeMap.Load()
 }
 
-func (r *Router) setRouteMap(routeMap routeMap) {
-	r.routeMap.Store(&routeMap)
+func (r *Router) setRouteMap(routeMap *routeMap) {
+	r.routeMap.Store(routeMap)
 }
 
 type Config struct {
@@ -92,9 +89,16 @@ type Config struct {
 	// See BucketsSearchMode constants for more detail.
 	BucketsSearchMode BucketsSearchMode
 
+	// TotalBucketCount is the number of buckets in the cluster, not the largest
+	// bucket ID. It is also the upper ID bound unless SparseBucketIDs is enabled.
 	TotalBucketCount uint64
-	User             string
-	Password         string
+	// SparseBucketIDs enables a map-based route cache for arbitrary positive
+	// uint64 bucket IDs. Memory usage depends on the number of cached routes,
+	// not the largest ID. Bucket IDs must be calculated by the application and
+	// buckets must be bootstrapped outside the router in this mode.
+	SparseBucketIDs bool
+	User            string
+	Password        string
 
 	// ConnOpts configures each storage connection inside a replicaset pool.
 	// Only the settings the v3 pool leaves to the connection are exposed here:
@@ -249,6 +253,10 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
+	if !r.isValidBucketID(bucketID) {
+		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	}
+
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	rs := nameToReplicasetRef[rsName]
@@ -257,18 +265,18 @@ func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) 
 	}
 
 	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(rs)
+	routeMap.store(bucketID, rs)
 
 	return rs, nil
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	if bucketID > r.cfg.TotalBucketCount {
+	if !r.isValidBucketID(bucketID) {
 		return
 	}
 
 	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(nil)
+	routeMap.store(bucketID, nil)
 }
 
 func (r *Router) RouteMapClean() {
@@ -276,8 +284,15 @@ func (r *Router) RouteMapClean() {
 }
 
 func (r *Router) setEmptyRouteMap() {
-	routeMap := make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
+	routeMap := &routeMap{}
+	if !r.cfg.SparseBucketIDs {
+		routeMap.dense = make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
+	}
 	r.setRouteMap(routeMap)
+}
+
+func (r *Router) isValidBucketID(bucketID uint64) bool {
+	return bucketID > 0 && (r.cfg.SparseBucketIDs || bucketID <= r.cfg.TotalBucketCount)
 }
 
 func prepareCfg(cfg Config) (Config, error) {
@@ -367,6 +382,10 @@ func (r *Router) BucketCount() uint64 {
 //
 // Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
+	if r.cfg.SparseBucketIDs {
+		return fmt.Errorf("cluster bootstrap is not supported for sparse bucket IDs")
+	}
+
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))

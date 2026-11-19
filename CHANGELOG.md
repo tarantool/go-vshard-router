@@ -1,5 +1,10 @@
 ## Unreleased
 
+FEATURES:
+* Add opt-in `Config.SparseBucketIDs` support for non-contiguous positive `uint64`
+  bucket IDs. The sparse route cache grows with the number of cached buckets,
+  while the default dense cache and `TotalBucketCount` cardinality are preserved.
+
 CHANGES:
 * Bump go-tarantool from v2.4.2 to v3.0.2.
 * Logging goes through `*slog.Logger`: `Config.Logger` replaces `Config.Loggerf`, and the
@@ -47,6 +52,8 @@ BUG FIXES:
 * `RouterMapCallRW` sends the storage reference timeout in seconds instead of
   nanoseconds, so unused references left after a canceled call expire within the intended
   timeout (#90).
+* `BucketSet` returns an error for an out-of-range bucket ID instead of indexing
+  outside the route cache. Batched discovery ignores invalid IDs from storage.
 * `ClusterBootstrap` logged a replicaset's slice index in place of its name.
 * Bucket discovery no longer leaks a goroutine per abandoned replicaset: both searches cancel
   the requests they stop waiting for instead of relying on the caller's context to expire.
