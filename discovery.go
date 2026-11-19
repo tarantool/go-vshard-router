@@ -207,8 +207,10 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 
 		for _, bucketID := range resp.Buckets {
 			if !r.isValidBucketID(bucketID) {
-				r.log().ErrorContext(ctx, "Ignoring got bucketID is out of range",
-					"bucket_id", bucketID, "total_bucket_count", r.cfg.TotalBucketCount, "max_bucket_id", r.maxBucketID())
+				r.log().ErrorContext(ctx, "Ignoring out-of-range bucket ID",
+					"bucket_id", bucketID,
+					"total_bucket_count", r.cfg.TotalBucketCount,
+					"max_bucket_id", r.maxBucketID())
 				continue
 			}
 
@@ -312,8 +314,10 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 
 				for _, bucketID := range resp.Buckets {
 					if !r.isValidBucketID(bucketID) {
-						r.log().ErrorContext(ctx, "Ignoring got bucketID is out of range",
-							"bucket_id", bucketID, "total_bucket_count", r.cfg.TotalBucketCount, "max_bucket_id", r.maxBucketID())
+						r.log().ErrorContext(ctx, "Ignoring out-of-range bucket ID",
+							"bucket_id", bucketID,
+							"total_bucket_count", r.cfg.TotalBucketCount,
+							"max_bucket_id", r.maxBucketID())
 						continue
 					}
 
