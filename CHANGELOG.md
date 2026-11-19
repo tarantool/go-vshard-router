@@ -1,8 +1,9 @@
 ## Unreleased
 
 FEATURES:
-* Add opt-in `Config.SparseBucketIDs` support for non-contiguous positive `uint64`
-  bucket IDs. The sparse route cache grows with the number of cached buckets,
+* Add opt-in `Config.SparseBucketIDs` support for non-contiguous `uint64` bucket
+  IDs in `1..99_999_999_999_999`, compatible with Tarantool/vshard's Lua `number`
+  requirement. The sparse route cache grows with the number of cached buckets,
   while the default dense cache and `TotalBucketCount` cardinality are preserved.
 
 CHANGES:
