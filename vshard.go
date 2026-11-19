@@ -43,6 +43,8 @@ type Router struct {
 	// Additionally, we can safely iterate over a map because it never changes.
 	nameToReplicaset atomic.Pointer[map[string]*Replicaset]
 
+	// The interface value is immutable after publication; cache entries are
+	// updated through its concurrency-safe methods. RouteMapClean publishes a new cache.
 	routeMap atomic.Pointer[routeMap]
 
 	// refID is used for Map-Reduce operation. Since it must be unique (within connection) for each ref request,
@@ -66,12 +68,12 @@ func (r *Router) log() *slog.Logger {
 	return r.cfg.Logger
 }
 
-func (r *Router) getRouteMap() *routeMap {
-	return r.routeMap.Load()
+func (r *Router) getRouteMap() routeMap {
+	return *r.routeMap.Load()
 }
 
-func (r *Router) setRouteMap(routeMap *routeMap) {
-	r.routeMap.Store(routeMap)
+func (r *Router) setRouteMap(routes routeMap) {
+	r.routeMap.Store(&routes)
 }
 
 type Config struct {
@@ -292,11 +294,15 @@ func (r *Router) RouteMapClean() {
 }
 
 func (r *Router) setEmptyRouteMap() {
-	routeMap := &routeMap{}
-	if !r.cfg.SparseBucketIDs {
-		routeMap.dense = make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
+	var routes routeMap
+	if r.cfg.SparseBucketIDs {
+		routes = &sparseRouteMap{}
+	} else {
+		routes = &denseRouteMap{
+			buckets: make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1),
+		}
 	}
-	r.setRouteMap(routeMap)
+	r.setRouteMap(routes)
 }
 
 func (r *Router) isValidBucketID(bucketID uint64) bool {

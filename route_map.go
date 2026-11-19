@@ -5,24 +5,37 @@ import (
 	"sync/atomic"
 )
 
-// routeMap keeps dense buckets in an array and sparse buckets in a concurrent
-// map. A routeMap must not be copied after use. RouteMapClean replaces the whole
-// object so in-flight discovery can finish using its original cache.
-type routeMap struct {
-	dense  []atomic.Pointer[Replicaset]
-	sparse sync.Map
+// routeMap is a concurrent bucket-to-replicaset cache. Storing or swapping a
+// nil replicaset removes the route. RouteMapClean replaces the whole cache so
+// in-flight discovery can finish using its original cache.
+type routeMap interface {
+	load(bucketID uint64) *Replicaset
+	store(bucketID uint64, rs *Replicaset)
+	swap(bucketID uint64, rs *Replicaset) *Replicaset
 }
 
-func (m *routeMap) load(bucketID uint64) *Replicaset {
-	if m.dense != nil {
-		return m.dense[bucketID].Load()
-	}
-
-	return m.loadSparse(bucketID)
+type denseRouteMap struct {
+	buckets []atomic.Pointer[Replicaset]
 }
 
-func (m *routeMap) loadSparse(bucketID uint64) *Replicaset {
-	value, ok := m.sparse.Load(bucketID)
+func (m *denseRouteMap) load(bucketID uint64) *Replicaset {
+	return m.buckets[bucketID].Load()
+}
+
+func (m *denseRouteMap) store(bucketID uint64, rs *Replicaset) {
+	m.buckets[bucketID].Store(rs)
+}
+
+func (m *denseRouteMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
+	return m.buckets[bucketID].Swap(rs)
+}
+
+type sparseRouteMap struct {
+	buckets sync.Map
+}
+
+func (m *sparseRouteMap) load(bucketID uint64) *Replicaset {
+	value, ok := m.buckets.Load(bucketID)
 	if !ok {
 		return nil
 	}
@@ -30,38 +43,21 @@ func (m *routeMap) loadSparse(bucketID uint64) *Replicaset {
 	return value.(*Replicaset)
 }
 
-func (m *routeMap) store(bucketID uint64, rs *Replicaset) {
-	if m.dense != nil {
-		m.dense[bucketID].Store(rs)
-		return
-	}
-
-	m.storeSparse(bucketID, rs)
-}
-
-func (m *routeMap) storeSparse(bucketID uint64, rs *Replicaset) {
+func (m *sparseRouteMap) store(bucketID uint64, rs *Replicaset) {
 	if rs == nil {
-		m.sparse.Delete(bucketID)
+		m.buckets.Delete(bucketID)
 	} else {
-		m.sparse.Store(bucketID, rs)
+		m.buckets.Store(bucketID, rs)
 	}
 }
 
-func (m *routeMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
-	if m.dense != nil {
-		return m.dense[bucketID].Swap(rs)
-	}
-
-	return m.swapSparse(bucketID, rs)
-}
-
-func (m *routeMap) swapSparse(bucketID uint64, rs *Replicaset) *Replicaset {
+func (m *sparseRouteMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
 	var value any
 	var loaded bool
 	if rs == nil {
-		value, loaded = m.sparse.LoadAndDelete(bucketID)
+		value, loaded = m.buckets.LoadAndDelete(bucketID)
 	} else {
-		value, loaded = m.sparse.Swap(bucketID, rs)
+		value, loaded = m.buckets.Swap(bucketID, rs)
 	}
 	if !loaded {
 		return nil

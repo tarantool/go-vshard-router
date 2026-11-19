@@ -333,40 +333,88 @@ func TestSparseBucketBootstrapRejected(t *testing.T) {
 	require.Error(t, router.ClusterBootstrap(context.Background(), false))
 }
 
-func TestSparseBucketConcurrentCache(t *testing.T) {
-	mp := mockpool.NewPooler(t)
-	mp.On("Do", mock.Anything, mock.Anything).Return(
-		func(req tarantool.Request, _ pool.Mode) tarantool.Future {
-			return tarantool.NewFutureWithErr(req, errors.New("bucket is absent"))
-		}).Maybe()
-	rs := &Replicaset{info: ReplicasetInfo{Name: "storage"}, conn: mp}
-	router := newBucketTestRouter(t, true, rs)
-	ctx := context.Background()
-	var workers sync.WaitGroup
-	for worker := 0; worker < 4; worker++ {
-		workers.Go(func() {
-			for i := 0; i < 250; i++ {
-				if _, err := router.BucketSet(sparseBucketA, rs.info.Name); err != nil {
-					t.Errorf("set bucket: %v", err)
-					return
-				}
-				router.DiscoveryHandleBuckets(ctx, rs, []uint64{sparseBucketA, sparseBucketB})
-				actual, err := router.Route(ctx, sparseBucketA)
-				if err == nil && actual != rs {
-					t.Errorf("unexpected replicaset: %v", actual)
-				}
-				router.BucketReset(sparseBucketA)
-				router.DiscoveryHandleBuckets(ctx, nil, []uint64{sparseBucketB})
-				router.RouteMapClean()
+func TestBucketConcurrentCache(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		sparse bool
+		ids    [2]uint64
+	}{
+		{name: "dense", ids: [2]uint64{1, 2}},
+		{name: "sparse", sparse: true, ids: [2]uint64{sparseBucketA, sparseBucketB}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mp := mockpool.NewPooler(t)
+			mp.On("Do", mock.Anything, mock.Anything).Return(
+				func(req tarantool.Request, _ pool.Mode) tarantool.Future {
+					return tarantool.NewFutureWithErr(req, errors.New("bucket is absent"))
+				}).Maybe()
+			rs := &Replicaset{info: ReplicasetInfo{Name: "storage"}, conn: mp}
+			router := newBucketTestRouter(t, tc.sparse, rs)
+			ctx := context.Background()
+			var workers sync.WaitGroup
+			for worker := 0; worker < 4; worker++ {
+				workers.Go(func() {
+					for i := 0; i < 250; i++ {
+						if _, err := router.BucketSet(tc.ids[0], rs.info.Name); err != nil {
+							t.Errorf("set bucket: %v", err)
+							return
+						}
+						router.DiscoveryHandleBuckets(ctx, rs, tc.ids[:])
+						actual, err := router.Route(ctx, tc.ids[0])
+						if err == nil && actual != rs {
+							t.Errorf("unexpected replicaset: %v", actual)
+						}
+						router.BucketReset(tc.ids[0])
+						router.DiscoveryHandleBuckets(ctx, nil, tc.ids[1:])
+						router.RouteMapClean()
+					}
+				})
 			}
+			workers.Wait()
+			_, err := router.BucketSet(tc.ids[0], rs.info.Name)
+			require.NoError(t, err)
+			actual, err := router.Route(ctx, tc.ids[0])
+			require.NoError(t, err)
+			require.Same(t, rs, actual)
 		})
 	}
-	workers.Wait()
-	_, err := router.BucketSet(sparseBucketA, rs.info.Name)
-	require.NoError(t, err)
-	actual, err := router.Route(ctx, sparseBucketA)
-	require.NoError(t, err)
-	require.Same(t, rs, actual)
+}
+
+func TestBucketCacheCleanSnapshot(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		sparse   bool
+		bucketID uint64
+	}{
+		{name: "dense", bucketID: 1},
+		{name: "sparse", sparse: true, bucketID: sparseBucketA},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			first := &Replicaset{info: ReplicasetInfo{Name: "first"}}
+			second := &Replicaset{info: ReplicasetInfo{Name: "second"}}
+			router := newBucketTestRouter(t, tc.sparse, first, second)
+			_, err := router.BucketSet(tc.bucketID, first.info.Name)
+			require.NoError(t, err)
+			oldRoutes := router.getRouteMap()
+
+			router.RouteMapClean()
+			require.Nil(t, router.getRouteMap().load(tc.bucketID))
+			require.Same(t, first, oldRoutes.load(tc.bucketID))
+
+			// A discovery started before RouteMapClean may still write to its
+			// snapshot, but those writes must not populate the replacement cache.
+			oldRoutes.store(tc.bucketID, second)
+			require.Nil(t, router.getRouteMap().load(tc.bucketID))
+			_, err = router.BucketSet(tc.bucketID, first.info.Name)
+			require.NoError(t, err)
+			require.Same(t, second, oldRoutes.swap(tc.bucketID, nil))
+			require.Nil(t, oldRoutes.load(tc.bucketID))
+			actual, err := router.Route(context.Background(), tc.bucketID)
+			require.NoError(t, err)
+			require.Same(t, first, actual)
+		})
+	}
 }
 
 func BenchmarkBucketRouteCached(b *testing.B) {
