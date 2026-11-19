@@ -114,6 +114,45 @@ func TestNewRouter_IgnoreUUID(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func createPinnedTestBucket(t testing.TB, ctx context.Context, rs *vshardrouter.Replicaset, bucketID uint64) {
+	t.Helper()
+	t.Cleanup(func() {
+		// Follow vshard's removal transitions atomically so no worker can
+		// observe the empty fixture in a transient state.
+		const deleteBucket = `
+			local id = ...
+			box.atomic(function()
+				local buckets = box.space._bucket
+				if buckets:get({id}) == nil then return end
+				for _, status in ipairs({'active', 'sending', 'sent', 'garbage'}) do
+					buckets:update({id}, {{'=', 'status', status}})
+				end
+				buckets:delete({id})
+			end)
+		`
+		future := rs.Pooler().Do(tarantool.NewEvalRequest(deleteBucket).
+			Args([]any{bucketID}).Context(ctx), pool.ModeRW)
+		_, err := future.Get()
+		future.Release()
+		require.NoError(t, err)
+	})
+	// Follow vshard's bootstrap transitions and pin within one transaction so
+	// the rebalancer cannot move the test fixture between creation and pinning.
+	const createBucket = `
+		local id = ...
+		box.atomic(function()
+			box.space._bucket:insert({id, 'receiving'})
+			box.space._bucket:replace({id, 'active'})
+			assert(vshard.storage.bucket_pin(id))
+		end)
+	`
+	future := rs.Pooler().Do(tarantool.NewEvalRequest(createBucket).
+		Args([]any{bucketID}).Context(ctx), pool.ModeRW)
+	_, err := future.Get()
+	future.Release()
+	require.NoError(t, err)
+}
+
 func TestRouter_SparseBucketBoundary(t *testing.T) {
 	// Keep this test sequential: the temporary bucket must be removed before
 	// parallel map/reduce tests check the cluster's total bucket count.
@@ -139,41 +178,7 @@ func TestRouter_SparseBucketBoundary(t *testing.T) {
 
 	rs := router.RouteAll()["storage_1"]
 	require.NotNil(t, rs)
-	t.Cleanup(func() {
-		// Follow vshard's removal transitions atomically so no worker can
-		// observe the empty fixture in a transient state.
-		const deleteBucket = `
-			local id = ...
-			box.atomic(function()
-				local buckets = box.space._bucket
-				if buckets:get({id}) == nil then return end
-				for _, status in ipairs({'active', 'sending', 'sent', 'garbage'}) do
-					buckets:update({id}, {{'=', 'status', status}})
-				end
-				buckets:delete({id})
-			end)
-		`
-		future := rs.Pooler().Do(tarantool.NewEvalRequest(deleteBucket).
-			Args([]any{maxBucketID}).Context(ctx), pool.ModeRW)
-		_, err := future.Get()
-		future.Release()
-		require.NoError(t, err)
-	})
-	// Follow vshard's bootstrap transitions and pin within one transaction so
-	// the rebalancer cannot move the test fixture between creation and pinning.
-	const createBucket = `
-		local id = ...
-		box.atomic(function()
-			box.space._bucket:insert({id, 'receiving'})
-			box.space._bucket:replace({id, 'active'})
-			assert(vshard.storage.bucket_pin(id))
-		end)
-	`
-	future := rs.Pooler().Do(tarantool.NewEvalRequest(createBucket).
-		Args([]any{maxBucketID}).Context(ctx), pool.ModeRW)
-	_, err = future.Get()
-	future.Release()
-	require.NoError(t, err)
+	createPinnedTestBucket(t, ctx, rs, maxBucketID)
 	_, err = router.BucketSet(maxBucketID, "storage_1")
 	require.NoError(t, err)
 
