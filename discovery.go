@@ -47,13 +47,13 @@ const (
 
 // Route get replicaset object by bucket identifier.
 func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
+	if !r.isValidBucketID(bucketID) {
 		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
 	}
 
 	routeMap := r.getRouteMap()
 
-	rs := routeMap[bucketID].Load()
+	rs := routeMap.load(bucketID)
 	if rs != nil {
 		nameToReplicasetRef := r.getNameToReplicaset()
 
@@ -206,12 +206,18 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 		}
 
 		for _, bucketID := range resp.Buckets {
+			if !r.isValidBucketID(bucketID) {
+				r.log().ErrorContext(ctx, "Ignoring got bucketID is out of range",
+					"bucket_id", bucketID, "total_bucket_count", r.cfg.TotalBucketCount)
+				continue
+			}
+
 			if bucketID == bucketIDToFind {
 				// We found where bucketIDToFind is located
 				rs = rsFuture.rs
 			}
 
-			routeMap[bucketID].Store(rsFuture.rs)
+			routeMap.store(bucketID, rsFuture.rs)
 		}
 
 		if bucketIDWasFound := rs != nil; !bucketIDWasFound {
@@ -241,15 +247,13 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 	}
 
 	for _, bucketID := range buckets {
-		// We don't validate bucketID intentionally, because we can't return an error here using the current API.
-		// We can't silence this error too, the caller should know about invalid arguments.
-		// So the only way to inform the caller is to panic here,
-		// that should happen if bucketID is out of the array bounds.
-		// if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		// 	continue
-		// }
+		if !r.isValidBucketID(bucketID) {
+			// Preserve the public API's panic on invalid input; this method has
+			// no error return. Network discovery validates responses separately.
+			panic(fmt.Sprintf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount))
+		}
 
-		oldRs := routeMap[bucketID].Swap(rs)
+		oldRs := routeMap.swap(bucketID, rs)
 
 		var oldRsName string
 		if oldRs != nil {
@@ -307,13 +311,13 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 				}
 
 				for _, bucketID := range resp.Buckets {
-					if bucketID > r.cfg.TotalBucketCount {
+					if !r.isValidBucketID(bucketID) {
 						r.log().ErrorContext(ctx, "Ignoring got bucketID is out of range",
 							"bucket_id", bucketID, "total_bucket_count", r.cfg.TotalBucketCount)
 						continue
 					}
 
-					routeMap[bucketID].Store(rs)
+					routeMap.store(bucketID, rs)
 				}
 
 				// There are no more buckets
