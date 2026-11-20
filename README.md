@@ -172,6 +172,34 @@ func main() {
   fmt.Printf("get typed result: %v", info)
 }
 ```
+### Sparse bucket IDs
+
+By default, bucket IDs belong to `1..TotalBucketCount` and the router uses an
+array for its route cache. For clusters with non-contiguous bucket IDs, enable
+`Config.SparseBucketIDs`:
+
+```go
+cfg.SparseBucketIDs = true
+cfg.TotalBucketCount = 2048 // Actual cluster-wide count, not the maximum ID.
+```
+
+The router then caches `uint64` IDs in `1..99_999_999_999_999` in a concurrent map.
+Pass the physical bucket ID to `Call`; it is sent to storage unchanged. Discovery
+uses the same IDs and can discover multiple disjoint ranges in one cluster.
+
+The upper bound is required for storage compatibility: Tarantool 2.x and 3.x
+decode unsigned MessagePack integers starting at `100_000_000_000_000` as Lua
+`cdata`, while vshard's `bucket_stat` and `storage.call` require a Lua `number`.
+See [Tarantool's integer conversion](https://github.com/tarantool/tarantool/blob/3.9.0/src/lua/utils.c#L596-L613)
+and [vshard's type check](https://github.com/tarantool/vshard/blob/1.0.0/vshard/storage/init.lua#L1451).
+`Call`, `Route`, and `BucketSet` reject IDs outside the supported range;
+discovery ignores out-of-range IDs returned by storage.
+
+Calculate IDs using your application's sharding algorithm. `BucketIDStrCRC32`
+still produces IDs in `1..TotalBucketCount` and does not implement custom ranges.
+Bootstrap sparse buckets on the storage side; `ClusterBootstrap` rejects this
+mode. `MapCallRW` still uses the actual total bucket count across all storages.
+
 ### Providers
 <img align="center"  src="docs/static/providers.png" alt="topology">
 

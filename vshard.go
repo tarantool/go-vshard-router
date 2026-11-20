@@ -25,8 +25,6 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
-type routeMap = []atomic.Pointer[Replicaset]
-
 type Router struct {
 	cfg Config
 
@@ -38,6 +36,8 @@ type Router struct {
 	// Additionally, we can safely iterate over a map because it never changes.
 	nameToReplicaset atomic.Pointer[map[string]*Replicaset]
 
+	// The interface value is immutable after publication; cache entries are
+	// updated through its concurrency-safe methods. RouteMapClean publishes a new cache.
 	routeMap atomic.Pointer[routeMap]
 
 	// refID is used for Map-Reduce operation. Since it must be unique (within connection) for each ref request,
@@ -62,12 +62,11 @@ func (r *Router) log() *slog.Logger {
 }
 
 func (r *Router) getRouteMap() routeMap {
-	ptr := r.routeMap.Load()
-	return *ptr
+	return *r.routeMap.Load()
 }
 
-func (r *Router) setRouteMap(routeMap routeMap) {
-	r.routeMap.Store(&routeMap)
+func (r *Router) setRouteMap(routes routeMap) {
+	r.routeMap.Store(&routes)
 }
 
 type Config struct {
@@ -92,9 +91,17 @@ type Config struct {
 	// See BucketsSearchMode constants for more detail.
 	BucketsSearchMode BucketsSearchMode
 
+	// TotalBucketCount is the number of buckets in the cluster, not the largest
+	// bucket ID. It is also the upper ID bound unless SparseBucketIDs is enabled.
 	TotalBucketCount uint64
-	User             string
-	Password         string
+	// SparseBucketIDs enables a map-based route cache for uint64 bucket IDs in
+	// 1..99_999_999_999_999, the range vshard accepts as Lua numbers rather than
+	// cdata. Memory usage depends on the number of cached routes,
+	// not the largest ID. Bucket IDs must be calculated by the application and
+	// buckets must be bootstrapped outside the router in this mode.
+	SparseBucketIDs bool
+	User            string
+	Password        string
 
 	// ConnOpts configures each storage connection inside a replicaset pool.
 	// Only the settings the v3 pool leaves to the connection are exposed here:
@@ -249,6 +256,12 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
+	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
+	if !isValidBucketID(bucketID, maxBucketID) {
+		return nil, fmt.Errorf("bucket id is out of range: %d (valid range 1..%d)", bucketID, maxBucketID)
+	}
+
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	rs := nameToReplicasetRef[rsName]
@@ -256,19 +269,18 @@ func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) 
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
 
-	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(rs)
+	routeMap.store(bucketID, rs)
 
 	return rs, nil
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	if bucketID > r.cfg.TotalBucketCount {
+	routeMap := r.getRouteMap()
+	if !isValidBucketID(bucketID, routeMap.maxBucketID()) {
 		return
 	}
 
-	routeMap := r.getRouteMap()
-	routeMap[bucketID].Store(nil)
+	routeMap.store(bucketID, nil)
 }
 
 func (r *Router) RouteMapClean() {
@@ -276,8 +288,15 @@ func (r *Router) RouteMapClean() {
 }
 
 func (r *Router) setEmptyRouteMap() {
-	routeMap := make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1)
-	r.setRouteMap(routeMap)
+	var routes routeMap
+	if r.cfg.SparseBucketIDs {
+		routes = &sparseRouteMap{}
+	} else {
+		routes = &denseRouteMap{
+			buckets: make([]atomic.Pointer[Replicaset], r.cfg.TotalBucketCount+1),
+		}
+	}
+	r.setRouteMap(routes)
 }
 
 func prepareCfg(cfg Config) (Config, error) {
@@ -367,6 +386,10 @@ func (r *Router) BucketCount() uint64 {
 //
 // Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
+	if r.cfg.SparseBucketIDs {
+		return fmt.Errorf("cluster bootstrap is not supported for sparse bucket IDs")
+	}
+
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
