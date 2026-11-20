@@ -25,13 +25,6 @@ var (
 	ErrTopologyProvider = fmt.Errorf("got error from topology provider")
 )
 
-// maxSparseBucketID matches Tarantool's luaL_pushuint64 number limit (DBL_INT_MAX).
-// Tarantool 2.x and 3.x decode unsigned MessagePack integers >= 1e14 as Lua
-// cdata, but vshard's bucket_stat and storage.call require a Lua number.
-// This is a storage compatibility limit, not the uint64 or float64 maximum.
-// https://github.com/tarantool/tarantool/blob/3.9.0/src/lua/utils.c#L596-L613
-const maxSparseBucketID uint64 = 99_999_999_999_999
-
 type Router struct {
 	cfg Config
 
@@ -263,8 +256,10 @@ func NewRouter(ctx context.Context, cfg Config) (*Router, error) {
 
 // BucketSet Set a bucket to a replicaset.
 func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) {
-	if !r.isValidBucketID(bucketID) {
-		return nil, fmt.Errorf("bucket id is out of range: %d (valid range 1..%d)", bucketID, r.maxBucketID())
+	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
+	if !isValidBucketID(bucketID, maxBucketID) {
+		return nil, fmt.Errorf("bucket id is out of range: %d (valid range 1..%d)", bucketID, maxBucketID)
 	}
 
 	nameToReplicasetRef := r.getNameToReplicaset()
@@ -274,18 +269,17 @@ func (r *Router) BucketSet(bucketID uint64, rsName string) (*Replicaset, error) 
 		return nil, newVShardErrorNoRouteToBucket(bucketID)
 	}
 
-	routeMap := r.getRouteMap()
 	routeMap.store(bucketID, rs)
 
 	return rs, nil
 }
 
 func (r *Router) BucketReset(bucketID uint64) {
-	if !r.isValidBucketID(bucketID) {
+	routeMap := r.getRouteMap()
+	if !isValidBucketID(bucketID, routeMap.maxBucketID()) {
 		return
 	}
 
-	routeMap := r.getRouteMap()
 	routeMap.store(bucketID, nil)
 }
 
@@ -303,17 +297,6 @@ func (r *Router) setEmptyRouteMap() {
 		}
 	}
 	r.setRouteMap(routes)
-}
-
-func (r *Router) isValidBucketID(bucketID uint64) bool {
-	return bucketID > 0 && bucketID <= r.maxBucketID()
-}
-
-func (r *Router) maxBucketID() uint64 {
-	if r.cfg.SparseBucketIDs {
-		return maxSparseBucketID
-	}
-	return r.cfg.TotalBucketCount
 }
 
 func prepareCfg(cfg Config) (Config, error) {

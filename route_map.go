@@ -8,14 +8,24 @@ import (
 // routeMap is a concurrent bucket-to-replicaset cache. Storing or swapping a
 // nil replicaset removes the route. RouteMapClean replaces the whole cache so
 // in-flight discovery can finish using its original cache.
+// Bucket IDs passed to load, store, and swap must be in 1..maxBucketID().
 type routeMap interface {
+	maxBucketID() uint64
 	load(bucketID uint64) *Replicaset
 	store(bucketID uint64, rs *Replicaset)
 	swap(bucketID uint64, rs *Replicaset) *Replicaset
 }
 
+func isValidBucketID(bucketID, maxBucketID uint64) bool {
+	return bucketID > 0 && bucketID <= maxBucketID
+}
+
 type denseRouteMap struct {
 	buckets []atomic.Pointer[Replicaset]
+}
+
+func (m *denseRouteMap) maxBucketID() uint64 {
+	return uint64(len(m.buckets)) - 1
 }
 
 func (m *denseRouteMap) load(bucketID uint64) *Replicaset {
@@ -30,8 +40,19 @@ func (m *denseRouteMap) swap(bucketID uint64, rs *Replicaset) *Replicaset {
 	return m.buckets[bucketID].Swap(rs)
 }
 
+// maxSparseBucketID matches Tarantool's luaL_pushuint64 number limit (DBL_INT_MAX).
+// Tarantool 2.x and 3.x decode unsigned MessagePack integers >= 1e14 as Lua
+// cdata, but vshard's bucket_stat and storage.call require a Lua number.
+// This is a storage compatibility limit, not the uint64 or float64 maximum.
+// https://github.com/tarantool/tarantool/blob/3.9.0/src/lua/utils.c#L596-L613
+const maxSparseBucketID uint64 = 99_999_999_999_999
+
 type sparseRouteMap struct {
 	buckets sync.Map
+}
+
+func (m *sparseRouteMap) maxBucketID() uint64 {
+	return maxSparseBucketID
 }
 
 func (m *sparseRouteMap) load(bucketID uint64) *Replicaset {
