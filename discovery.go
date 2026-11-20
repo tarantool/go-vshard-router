@@ -47,11 +47,11 @@ const (
 
 // Route get replicaset object by bucket identifier.
 func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	if !r.isValidBucketID(bucketID) {
-		return nil, fmt.Errorf("bucket id is out of range: %d (valid range 1..%d)", bucketID, r.maxBucketID())
-	}
-
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
+	if !isValidBucketID(bucketID, maxBucketID) {
+		return nil, fmt.Errorf("bucket id is out of range: %d (valid range 1..%d)", bucketID, maxBucketID)
+	}
 
 	rs := routeMap.load(bucketID)
 	if rs != nil {
@@ -158,6 +158,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
 	nameToReplicasetRef := r.getNameToReplicaset()
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
 
 	type rsFuture struct {
 		rs     *Replicaset
@@ -206,11 +207,11 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 		}
 
 		for _, bucketID := range resp.Buckets {
-			if !r.isValidBucketID(bucketID) {
+			if !isValidBucketID(bucketID, maxBucketID) {
 				r.log().ErrorContext(ctx, "Ignoring out-of-range bucket ID",
 					"bucket_id", bucketID,
 					"total_bucket_count", r.cfg.TotalBucketCount,
-					"max_bucket_id", r.maxBucketID())
+					"max_bucket_id", maxBucketID)
 				continue
 			}
 
@@ -241,6 +242,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 // DiscoveryHandleBuckets arrange downloaded buckets to the route map so as they reference a given replicaset.
 func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buckets []uint64) {
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
 	removedFrom := make(map[string]int)
 
 	var newRsName string
@@ -249,10 +251,10 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 	}
 
 	for _, bucketID := range buckets {
-		if !r.isValidBucketID(bucketID) {
+		if !isValidBucketID(bucketID, maxBucketID) {
 			// Preserve the public API's panic on invalid input; this method has
 			// no error return. Network discovery validates responses separately.
-			panic(fmt.Sprintf("bucket id is out of range: %d (valid range 1..%d)", bucketID, r.maxBucketID()))
+			panic(fmt.Sprintf("bucket id is out of range: %d (valid range 1..%d)", bucketID, maxBucketID))
 		}
 
 		oldRs := routeMap.swap(bucketID, rs)
@@ -297,6 +299,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 	var errGr errgroup.Group
 
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	for _, rs := range nameToReplicasetRef {
@@ -313,11 +316,11 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 				}
 
 				for _, bucketID := range resp.Buckets {
-					if !r.isValidBucketID(bucketID) {
+					if !isValidBucketID(bucketID, maxBucketID) {
 						r.log().ErrorContext(ctx, "Ignoring out-of-range bucket ID",
 							"bucket_id", bucketID,
 							"total_bucket_count", r.cfg.TotalBucketCount,
-							"max_bucket_id", r.maxBucketID())
+							"max_bucket_id", maxBucketID)
 						continue
 					}
 
