@@ -13,7 +13,9 @@ CHANGES:
   `ifNotBootstrapped` is true. Buckets are distributed over replicasets sorted by name, so
   the result no longer depends on map iteration order. If no replicaset has a weight set,
   as with every topology provider, the buckets are split evenly instead of failing with
-  `weightSum should be greater than 0` (#17).
+  `weightSum should be greater than 0`. With `ifNotBootstrapped`, a cluster that holds fewer
+  than `TotalBucketCount` buckets is reported as partially bootstrapped instead of being
+  skipped (#17).
 * Bump go-tarantool from v2.4.2 to v3.0.2.
 * Logging goes through `*slog.Logger`: `Config.Logger` replaces `Config.Loggerf`, and the
   `LogfProvider` interface, `StdoutLoggerf` and the `providers/slog` adapter are removed.

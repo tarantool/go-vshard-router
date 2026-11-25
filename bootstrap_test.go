@@ -159,6 +159,44 @@ func TestClusterBootstrap_AlreadyBootstrapped(t *testing.T) {
 	}
 }
 
+func TestClusterBootstrap_PartiallyBootstrapped(t *testing.T) {
+	t.Parallel()
+	// An earlier bootstrap created the buckets on one replicaset and failed
+	// on the other one: half of the buckets are missing.
+	done := &bootstrapTestStorage{bucketCount: 2}
+	missing := &bootstrapTestStorage{}
+	router := newBootstrapTestRouter(t, 4,
+		done.replicaset(t, "done", 1),
+		missing.replicaset(t, "missing", 1),
+	)
+
+	err := router.ClusterBootstrap(context.Background(), true)
+	require.ErrorContains(t, err, "partially bootstrapped: found 2 of 4 buckets")
+	require.Empty(t, done.created)
+	require.Empty(t, missing.created)
+
+	// Without ifNotBootstrapped, any bucket is NON_EMPTY, as in vshard.
+	var vshardErr *StorageCallVShardError
+	require.ErrorAs(t, router.ClusterBootstrap(context.Background(), false), &vshardErr)
+	require.Equal(t, VShardErrNameNonEmpty, vshardErr.Name)
+}
+
+func TestClusterBootstrap_Rebalancing(t *testing.T) {
+	t.Parallel()
+	// buckets_count also counts buckets being sent or collected, so a cluster
+	// in the middle of rebalancing may report more than TotalBucketCount.
+	first := &bootstrapTestStorage{bucketCount: 3}
+	second := &bootstrapTestStorage{bucketCount: 3}
+	router := newBootstrapTestRouter(t, 4,
+		first.replicaset(t, "first", 1),
+		second.replicaset(t, "second", 1),
+	)
+
+	require.NoError(t, router.ClusterBootstrap(context.Background(), true))
+	require.Empty(t, first.created)
+	require.Empty(t, second.created)
+}
+
 func TestClusterBootstrap_BucketsCountError(t *testing.T) {
 	t.Parallel()
 	for _, ifNotBootstrapped := range []bool{false, true} {

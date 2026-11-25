@@ -379,6 +379,8 @@ func (r *Router) BucketCount() uint64 {
 // ClusterBootstrap distributes buckets across replicasets.
 // Idempotent: if any of replicasets has buckets, the cluster is considered already bootstrapped; function
 // returns a NON_EMPTY error, or succeeds without changes when ifNotBootstrapped is true.
+// With ifNotBootstrapped, it returns an error if the replicasets hold fewer than TotalBucketCount
+// buckets in total: an earlier bootstrap stopped halfway and has to be finished manually.
 //
 // Buckets are split according to ReplicasetInfo.Weight. If no replicaset has a weight set,
 // all of them get equal shares, as vshard's default weight of 1 does.
@@ -396,26 +398,53 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 	// Check that every replicaset is empty before bootstrapping. If at least one
 	// replicaset already holds buckets, the cluster was bootstrapped before.
 	var lastErr error
+	var bucketCount uint64
 
 	for name, rs := range nameToReplicasetRef {
 		// Ask the master, as vshard.router.bootstrap does: a lagging replica
 		// may not have the buckets yet and make the cluster look empty.
 		count, err := rs.bucketsCount(ctx, pool.ModeRW)
 		if err != nil {
-			if ifNotBootstrapped {
-				lastErr = fmt.Errorf("buckets_count on replicaset %s: %w", name, err)
-			} else {
-				return fmt.Errorf("buckets_count on replicaset %s: %w", name, err)
+			err = fmt.Errorf("buckets_count on replicaset %s: %w", name, err)
+			if !ifNotBootstrapped {
+				return err
 			}
-		} else if count > 0 {
-			if ifNotBootstrapped {
-				r.log().InfoContext(ctx, "cluster bootstrap skipped: replicaset has buckets", "replicaset", name)
+			// As in vshard.router.bootstrap, one non-empty replicaset is enough
+			// to consider the cluster bootstrapped, so keep asking the others.
+			lastErr = err
 
-				return nil
-			}
+			continue
+		}
 
+		if count > 0 && !ifNotBootstrapped {
 			return newVShardErrorNonEmpty()
 		}
+
+		bucketCount += count
+	}
+
+	if bucketCount > 0 {
+		if lastErr != nil {
+			r.log().WarnContext(ctx, "cluster bootstrap skipped: buckets found, "+
+				"but not every replicaset answered to check that none is missing",
+				"error", lastErr)
+
+			return nil
+		}
+
+		// buckets_count includes buckets being moved, so the sum may exceed
+		// TotalBucketCount during rebalancing, but it never falls below it in a
+		// bootstrapped cluster. A smaller sum means an earlier bootstrap stopped
+		// halfway, and skipping it would leave the missing buckets unroutable.
+		if bucketCount < r.cfg.TotalBucketCount {
+			return fmt.Errorf("cluster is partially bootstrapped: found %d of %d buckets",
+				bucketCount, r.cfg.TotalBucketCount)
+		}
+
+		r.log().InfoContext(ctx, "cluster bootstrap skipped: cluster is already bootstrapped",
+			"bucket_count", bucketCount)
+
+		return nil
 	}
 
 	if lastErr != nil {
