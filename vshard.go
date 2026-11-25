@@ -13,6 +13,7 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 
 	tarantool "github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
 )
 
 var (
@@ -394,7 +395,9 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 	var lastErr error
 
 	for name, rs := range nameToReplicasetRef {
-		count, err := rs.BucketsCount(ctx)
+		// Ask the master, as vshard.router.bootstrap does: a lagging replica
+		// may not have the buckets yet and make the cluster look empty.
+		count, err := rs.bucketsCount(ctx, pool.ModeRW)
 		if err != nil {
 			if ifNotBootstrapped {
 				lastErr = fmt.Errorf("buckets_count on replicaset %s: %w", name, err)

@@ -24,18 +24,25 @@ type bootstrapTestStorage struct {
 
 	mu      sync.Mutex
 	created [][2]uint64
+	modes   map[string][]pool.Mode
 }
 
 func (s *bootstrapTestStorage) replicaset(t *testing.T, name string, weight float64) *Replicaset {
 	t.Helper()
 	mp := mockpool.NewPooler(t)
 	mp.On("Do", mock.Anything, mock.Anything).Return(
-		func(req tarantool.Request, _ pool.Mode) tarantool.Future {
+		func(req tarantool.Request, mode pool.Mode) tarantool.Future {
 			function, args, err := bucketTestRequest(req)
 			if err != nil {
 				t.Errorf("decode request: %v", err)
 				return tarantool.NewFutureWithErr(req, err)
 			}
+			s.mu.Lock()
+			if s.modes == nil {
+				s.modes = make(map[string][]pool.Mode)
+			}
+			s.modes[function] = append(s.modes[function], mode)
+			s.mu.Unlock()
 			switch function {
 			case "vshard.storage.buckets_count":
 				if s.countErr != nil {
@@ -89,6 +96,15 @@ func TestClusterBootstrap_EmptyCluster(t *testing.T) {
 	require.Equal(t, [][2]uint64{{1, 2}}, storages["a"].created)
 	require.Equal(t, [][2]uint64{{3, 6}}, storages["b"].created)
 	require.Empty(t, storages["c"].created)
+
+	// Both the emptiness check and bucket creation must go to the master.
+	require.Equal(t, map[string][]pool.Mode{
+		"vshard.storage.buckets_count":       {pool.ModeRW},
+		"vshard.storage.bucket_force_create": {pool.ModeRW},
+	}, storages["a"].modes)
+	require.Equal(t, map[string][]pool.Mode{
+		"vshard.storage.buckets_count": {pool.ModeRW},
+	}, storages["c"].modes)
 }
 
 func TestClusterBootstrap_AlreadyBootstrapped(t *testing.T) {
