@@ -209,6 +209,38 @@ func TestRouter_SparseBucketBoundary(t *testing.T) {
 	}
 }
 
+func TestRouter_ClusterBootstrapNonEmpty(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topology),
+		DiscoveryMode:    vshardrouter.DiscoveryModeOnce,
+		TotalBucketCount: totalBucketCount,
+		User:             username,
+	})
+	require.NoError(t, err)
+
+	// The cluster is bootstrapped by the Lua router in config.lua, so the Go
+	// bootstrap must refuse to create buckets again.
+	err = router.ClusterBootstrap(ctx, false)
+	var vshardErr *vshardrouter.StorageCallVShardError
+	require.ErrorAs(t, err, &vshardErr)
+	require.Equal(t, vshardrouter.VShardErrNameNonEmpty, vshardErr.Name)
+
+	require.NoError(t, router.ClusterBootstrap(ctx, true))
+
+	var bucketCount uint64
+	for _, rs := range router.RouteAll() {
+		count, err := rs.BucketsCount(ctx)
+		require.NoError(t, err)
+		bucketCount += count
+	}
+	require.Equal(t, uint64(totalBucketCount), bucketCount)
+}
+
 func TestRouter_Topology(t *testing.T) {
 	t.Parallel()
 
