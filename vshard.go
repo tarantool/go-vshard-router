@@ -376,14 +376,24 @@ func (r *Router) BucketCount() uint64 {
 // -- Bootstrap
 // --------------------------------------------------------------------------------
 
-// ClusterBootstrap distributes buckets across replicasets.
-// Idempotent: if any of replicasets has buckets, the cluster is considered already bootstrapped; function
-// returns a NON_EMPTY error, or succeeds without changes when ifNotBootstrapped is true.
-// With ifNotBootstrapped, it returns an error if the replicasets hold fewer than TotalBucketCount
-// buckets in total: an earlier bootstrap stopped halfway and has to be finished manually.
+// ClusterBootstrap creates TotalBucketCount buckets and distributes them over
+// the replicasets, as vshard.router.bootstrap does.
 //
-// Buckets are split according to ReplicasetInfo.Weight. If no replicaset has a weight set,
-// all of them get equal shares, as vshard's default weight of 1 does.
+// If any replicaset already holds buckets, the cluster is considered
+// bootstrapped: ClusterBootstrap returns a NON_EMPTY error, or nil when
+// ifNotBootstrapped is true. With ifNotBootstrapped it returns an error if the
+// replicasets hold fewer than TotalBucketCount buckets in total: an earlier
+// bootstrap stopped halfway and has to be finished manually.
+//
+// Buckets are split according to ReplicasetInfo.Weight. If no replicaset has a
+// weight set, all of them get equal shares, as vshard's default weight of 1
+// does.
+//
+// The emptiness check and the bucket creation are not atomic, so call
+// ClusterBootstrap from one place rather than from every instance of a service
+// at startup. Concurrent calls with the same topology compute the same bucket
+// layout and cannot put one bucket on two replicasets, but all of them except
+// one are likely to fail on duplicate bucket IDs, even with ifNotBootstrapped.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
 	if r.cfg.SparseBucketIDs {
 		return fmt.Errorf("cluster bootstrap is not supported for sparse bucket IDs")
