@@ -73,6 +73,13 @@ func TestNewProvider_Tarantool3(t *testing.T) {
 	provider := vprovider.NewProvider(ctx, v, vprovider.ConfigTypeTarantool3)
 
 	anyProviderValidation(t, provider)
+
+	// storage-b sets sharding.weight, storage-a gets Tarantool's default.
+	weights := make(map[string]float64)
+	for rs := range provider.Topology() {
+		weights[rs.Name] = rs.Weight
+	}
+	require.Equal(t, map[string]float64{"storage-a": 1, "storage-b": 2}, weights)
 }
 
 func parseEtcdUrls(strs []string) []url.URL {

@@ -5,6 +5,9 @@ FEATURES:
   IDs in `1..99_999_999_999_999`, compatible with Tarantool/vshard's Lua `number`
   requirement. The sparse route cache grows with the number of cached buckets,
   while the default dense cache and `TotalBucketCount` cardinality are preserved.
+* The viper `tarantool3` topology provider fills `ReplicasetInfo.Weight` from
+  `sharding.weight`, taken from the replicaset, the group or the global scope of the
+  Tarantool 3 config, and defaults it to 1 as Tarantool does.
 
 CHANGES:
 * `Router.ClusterBootstrap` is no longer deprecated and follows `vshard.router.bootstrap`:
