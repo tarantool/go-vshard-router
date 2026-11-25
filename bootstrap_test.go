@@ -107,6 +107,26 @@ func TestClusterBootstrap_EmptyCluster(t *testing.T) {
 	}, storages["c"].modes)
 }
 
+func TestClusterBootstrap_DefaultWeights(t *testing.T) {
+	t.Parallel()
+	// Topology providers leave Weight zero; the buckets must still be split
+	// evenly instead of failing on a zero weight sum.
+	storages := map[string]*bootstrapTestStorage{"a": {}, "b": {}, "c": {}}
+	router := newBootstrapTestRouter(t, 9,
+		storages["a"].replicaset(t, "a", 0),
+		storages["b"].replicaset(t, "b", 0),
+		storages["c"].replicaset(t, "c", 0),
+	)
+
+	require.NoError(t, router.ClusterBootstrap(context.Background(), false))
+	require.Equal(t, [][2]uint64{{1, 3}}, storages["a"].created)
+	require.Equal(t, [][2]uint64{{4, 3}}, storages["b"].created)
+	require.Equal(t, [][2]uint64{{7, 3}}, storages["c"].created)
+	for name, rs := range router.getNameToReplicaset() {
+		require.Zero(t, rs.info.Weight, "replicaset %s weight must stay unchanged", name)
+	}
+}
+
 func TestClusterBootstrap_AlreadyBootstrapped(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

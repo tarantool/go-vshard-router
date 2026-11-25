@@ -379,6 +379,9 @@ func (r *Router) BucketCount() uint64 {
 // ClusterBootstrap distributes buckets across replicasets.
 // Idempotent: if any of replicasets has buckets, the cluster is considered already bootstrapped; function
 // returns a NON_EMPTY error, or succeeds without changes when ifNotBootstrapped is true.
+//
+// Buckets are split according to ReplicasetInfo.Weight. If no replicaset has a weight set,
+// all of them get equal shares, as vshard's default weight of 1 does.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
 	if r.cfg.SparseBucketIDs {
 		return fmt.Errorf("cluster bootstrap is not supported for sparse bucket IDs")
@@ -427,8 +430,22 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 	sort.Strings(names)
 
 	rssToBootstrap := make([]Replicaset, 0, len(names))
+	weightsUnset := true
 	for _, name := range names {
-		rssToBootstrap = append(rssToBootstrap, *nameToReplicasetRef[name])
+		rs := *nameToReplicasetRef[name]
+		weightsUnset = weightsUnset && rs.info.Weight == 0
+		rssToBootstrap = append(rssToBootstrap, rs)
+	}
+
+	// Topology providers do not fill Weight, so it is usually zero everywhere,
+	// and CalculateEtalonBalance would reject such a topology. vshard defaults
+	// a replicaset weight to 1; do the same when no weight is set at all, and
+	// keep the configured weights, zero ones included, otherwise. The slice
+	// holds copies, so the router's replicasets are not changed.
+	if weightsUnset {
+		for i := range rssToBootstrap {
+			rssToBootstrap[i].info.Weight = 1
+		}
 	}
 
 	if err := CalculateEtalonBalance(rssToBootstrap, r.cfg.TotalBucketCount); err != nil {
