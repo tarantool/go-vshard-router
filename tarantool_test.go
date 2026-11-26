@@ -241,6 +241,82 @@ func TestRouter_ClusterBootstrapNonEmpty(t *testing.T) {
 	require.Equal(t, uint64(totalBucketCount), bucketCount)
 }
 
+func TestRouter_ClusterBootstrapEmpty(t *testing.T) {
+	t.Parallel()
+
+	// A separate cluster that nobody bootstraps, see config_bootstrap.lua.
+	const bucketCount = 10
+	servers := []struct{ replicaset, instance, addr string }{
+		{"bootstrap_1", "bootstrap_1_a", "127.0.0.1:3311"},
+		{"bootstrap_2", "bootstrap_2_a", "127.0.0.1:3312"},
+	}
+
+	opts := make([]test_helpers.StartOpts, 0, len(servers))
+	emptyTopology := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo, len(servers))
+	for _, server := range servers {
+		opts = append(opts, test_helpers.StartOpts{
+			Dialer:       tarantool.NetDialer{Address: server.addr, User: username},
+			InitScript:   "config_bootstrap.lua",
+			Listen:       server.addr,
+			WaitStart:    100 * time.Millisecond,
+			ConnectRetry: 100,
+			RetryTimeout: 500 * time.Millisecond,
+			WorkDir:      server.instance,
+		})
+		// No weights, as with every topology provider: the buckets must be
+		// split evenly.
+		rsInfo := vshardrouter.ReplicasetInfo{Name: server.replicaset, UUID: uuid.New()}
+		emptyTopology[rsInfo] = []vshardrouter.InstanceInfo{
+			{Name: server.instance, UUID: uuid.New(), Addr: server.addr},
+		}
+	}
+
+	instances, err := chelper.StartTarantoolInstances(opts)
+	t.Cleanup(func() {
+		for _, instance := range instances {
+			if instance != nil {
+				test_helpers.StopTarantoolWithCleanup(instance)
+			}
+		}
+	})
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(emptyTopology),
+		DiscoveryMode:    vshardrouter.DiscoveryModeOnce,
+		TotalBucketCount: bucketCount,
+		User:             username,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, router.ClusterBootstrap(ctx, false))
+
+	replicasets := router.RouteAll()
+	counts := make(map[string]uint64, len(replicasets))
+	for name, rs := range replicasets {
+		counts[name], err = rs.BucketsCount(ctx)
+		require.NoError(t, err)
+	}
+	require.Equal(t, map[string]uint64{"bootstrap_1": 5, "bootstrap_2": 5}, counts)
+
+	// Ranges follow the sorted replicaset names.
+	for bucketID, name := range map[uint64]string{1: "bootstrap_1", 5: "bootstrap_1", 6: "bootstrap_2", 10: "bootstrap_2"} {
+		rs, err := router.Route(ctx, bucketID)
+		require.NoError(t, err)
+		require.Same(t, replicasets[name], rs, "bucket %d", bucketID)
+	}
+
+	// The cluster is bootstrapped now.
+	err = router.ClusterBootstrap(ctx, false)
+	var vshardErr *vshardrouter.StorageCallVShardError
+	require.ErrorAs(t, err, &vshardErr)
+	require.Equal(t, vshardrouter.VShardErrNameNonEmpty, vshardErr.Name)
+	require.NoError(t, router.ClusterBootstrap(ctx, true))
+}
+
 func TestRouter_Topology(t *testing.T) {
 	t.Parallel()
 
