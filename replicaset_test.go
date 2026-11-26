@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
 	"github.com/vmihailenco/msgpack/v5"
 
 	mockpool "github.com/tarantool/go-vshard-router/v2/mocks/pool"
@@ -72,6 +73,21 @@ func TestReplicaset_BucketStat(t *testing.T) {
 		statInfo, err := rs.BucketStat(ctx, 123)
 		require.Error(t, err)
 		require.Equal(t, statInfo, BucketStatInfo{BucketID: 0, Status: ""})
+	})
+
+	t.Run("asks the master", func(t *testing.T) {
+		// A replica may lag behind or be missing, so bucket_stat must go to
+		// the master, as vshard.router does with callrw. The mock matches only
+		// pool.ModeRW and fails the test on any other mode.
+		futureError := fmt.Errorf("reached the master")
+		errFuture := tarantool.NewFutureWithErr(tarantool.NewCallRequest("test"), futureError)
+
+		mPool := mockpool.NewPooler(t)
+		mPool.On("Do", mock.Anything, pool.ModeRW).Return(errFuture).Once()
+		rs.conn = mPool
+
+		_, err := rs.BucketStat(ctx, 123)
+		require.Equal(t, futureError, err)
 	})
 
 	/*
