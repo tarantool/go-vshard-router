@@ -118,13 +118,28 @@ func createPinnedTestBucket(t testing.TB, ctx context.Context, rs *vshardrouter.
 	t.Helper()
 	t.Cleanup(func() {
 		// Follow vshard's removal transitions atomically so no worker can
-		// observe the empty fixture in a transient state.
+		// observe the empty fixture in a transient state. Since vshard 0.1.41
+		// _bucket has an 'opts' field, and every transition to 'sending' must
+		// increment opts.generation; older versions have neither.
 		const deleteBucket = `
 			local id = ...
 			box.atomic(function()
 				local buckets = box.space._bucket
-				if buckets:get({id}) == nil then return end
-				for _, status in ipairs({'active', 'sending', 'sent', 'garbage'}) do
+				local bucket = buckets:get({id})
+				if bucket == nil then return end
+				local has_opts = false
+				for _, field in ipairs(buckets:format()) do
+					has_opts = has_opts or field.name == 'opts'
+				end
+				buckets:update({id}, {{'=', 'status', 'active'}})
+				if has_opts then
+					local opts = bucket.opts or {}
+					local generation = (opts.generation or 0) + 1
+					buckets:replace({id, 'sending', box.NULL, {generation = generation}})
+				else
+					buckets:update({id}, {{'=', 'status', 'sending'}})
+				end
+				for _, status in ipairs({'sent', 'garbage'}) do
 					buckets:update({id}, {{'=', 'status', status}})
 				end
 				buckets:delete({id})
