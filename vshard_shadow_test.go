@@ -3,6 +3,7 @@ package vshard_router_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -73,9 +74,44 @@ func TestNewRouter_InstanceAddr(t *testing.T) {
 }
 
 func TestRouterBucketIDStrCRC32(t *testing.T) {
-	// required values from tarantool example
-	require.Equal(t, uint64(103202), vshardrouter.BucketIDStrCRC32("2707623829", uint64(256000)))
-	require.Equal(t, uint64(35415), vshardrouter.BucketIDStrCRC32("2706201716", uint64(256000)))
+	// The values come from vshard: crc is vshard.hash.strcrc32(key), and the
+	// bucket IDs are router:bucket_id_strcrc32(key) for the bucket count.
+	for _, tc := range []struct {
+		name       string
+		key        string
+		crc        uint64
+		bucket256K uint64
+		bucket3K   uint64
+	}{
+		// With nothing to hash, the CRC stays at its initial value: vshard
+		// does not invert the result.
+		{name: "empty", key: "", crc: 4294967295, bucket256K: 55296, bucket3K: 2296},
+		{name: "one byte", key: "a", crc: 1043315919, bucket256K: 115920, bucket3K: 2920},
+		{name: "digits", key: "2707623829", crc: 1662567201, bucket256K: 103202, bucket3K: 202},
+		{name: "digits 2", key: "2706201716", crc: 1358883414, bucket256K: 35415, bucket3K: 415},
+		{name: "ascii", key: "test_bench_key", crc: 3258524077, bucket256K: 156078, bucket3K: 2078},
+		{name: "utf-8", key: "привет", crc: 302751245, bucket256K: 159246, bucket3K: 246},
+		{name: "binary", key: "\x00\xff\x00", crc: 1014528006, bucket256K: 7, bucket3K: 7},
+		{name: "uuid", key: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", crc: 841560429,
+			bucket256K: 88430, bucket3K: 430},
+		{name: "1 KiB", key: strings.Repeat("k", 1024), crc: 4206706862, bucket256K: 114863, bucket3K: 1863},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.bucket256K, vshardrouter.BucketIDStrCRC32(tc.key, 256000))
+			require.Equal(t, tc.bucket3K, vshardrouter.BucketIDStrCRC32(tc.key, 3000))
+			require.Equal(t, uint64(1), vshardrouter.BucketIDStrCRC32(tc.key, 1))
+			// With 2^32 buckets the bucket ID is the CRC itself plus one.
+			require.Equal(t, tc.crc+1, vshardrouter.BucketIDStrCRC32(tc.key, 1<<32))
+		})
+	}
+}
+
+func TestRouterBucketIDStrCRC32_NoAllocs(t *testing.T) {
+	key := strings.Repeat("k", 1024)
+	allocs := testing.AllocsPerRun(100, func() {
+		vshardrouter.BucketIDStrCRC32(key, 256000)
+	})
+	require.Zero(t, allocs, "BucketIDStrCRC32 must not copy the key")
 }
 
 func BenchmarkRouterBucketIDStrCRC32(b *testing.B) {

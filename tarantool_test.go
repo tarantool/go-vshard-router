@@ -404,6 +404,54 @@ func BenchmarkCallSimpleSelect_GO_Call(b *testing.B) {
 	b.ReportAllocs()
 }
 
+// TestBucketIDStrCRC32_LuaRouter checks BucketIDStrCRC32 against the Lua
+// vshard router of the test cluster, on every key length up to a few CRC
+// blocks and on keys large enough for the hardware CRC to take over.
+func TestBucketIDStrCRC32_LuaRouter(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := tarantool.Connect(ctx, tarantool.NetDialer{
+		Address: "0.0.0.0:12000",
+		User:    username,
+	}, tarantool.Opts{Timeout: 5 * time.Second})
+	require.NoError(t, err)
+	defer conn.Close()
+
+	rnd := rand.New(rand.NewSource(1)) //nolint:gosec // reproducible test keys
+	lengths := []int{0, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65,
+		255, 256, 257, 1023, 1024, 1025, 4095, 4096, 4097, 65537}
+	keys := make([]string, 0, len(lengths)+4)
+	keys = append(keys, "", "привет", "\x00", "\xff\xff\xff\xff")
+	for _, n := range lengths {
+		key := make([]byte, n)
+		rnd.Read(key)
+		keys = append(keys, string(key))
+	}
+
+	// The CRC is compared on its own too: modulo the bucket count, a wrong
+	// CRC still has a fair chance to give the right bucket ID.
+	var luaResults [][2]uint64
+	err = conn.Do(tarantool.NewEvalRequest(`
+		local hash = require('vshard.hash')
+		local result = {}
+		for i, key in ipairs(...) do
+			result[i] = {router:bucket_id_strcrc32(key), hash.strcrc32(key)}
+		end
+		return result
+	`).Args([]any{keys})).GetTyped(&[]any{&luaResults})
+	require.NoError(t, err)
+	require.Len(t, luaResults, len(keys))
+
+	for i, key := range keys {
+		bucketID, crc := luaResults[i][0], luaResults[i][1]
+		require.Equal(t, bucketID, vshardrouter.BucketIDStrCRC32(key, totalBucketCount), "key length %d", len(key))
+		require.Equal(t, crc+1, vshardrouter.BucketIDStrCRC32(key, 1<<32), "key length %d", len(key))
+	}
+}
+
 func BenchmarkCallSimpleInsert_Lua(b *testing.B) {
 	b.StopTimer()
 
