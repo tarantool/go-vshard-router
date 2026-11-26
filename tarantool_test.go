@@ -114,6 +114,86 @@ func TestNewRouter_IgnoreUUID(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func createPinnedTestBucket(t testing.TB, ctx context.Context, rs *vshardrouter.Replicaset, bucketID uint64) {
+	t.Helper()
+	t.Cleanup(func() {
+		// Follow vshard's removal transitions atomically so no worker can
+		// observe the empty fixture in a transient state.
+		const deleteBucket = `
+			local id = ...
+			box.atomic(function()
+				local buckets = box.space._bucket
+				if buckets:get({id}) == nil then return end
+				for _, status in ipairs({'active', 'sending', 'sent', 'garbage'}) do
+					buckets:update({id}, {{'=', 'status', status}})
+				end
+				buckets:delete({id})
+			end)
+		`
+		future := rs.Pooler().Do(tarantool.NewEvalRequest(deleteBucket).
+			Args([]any{bucketID}).Context(ctx), pool.ModeRW)
+		_, err := future.Get()
+		future.Release()
+		require.NoError(t, err)
+	})
+	// Follow vshard's bootstrap transitions and pin within one transaction so
+	// the rebalancer cannot move the test fixture between creation and pinning.
+	const createBucket = `
+		local id = ...
+		box.atomic(function()
+			box.space._bucket:insert({id, 'receiving'})
+			box.space._bucket:replace({id, 'active'})
+			assert(vshard.storage.bucket_pin(id))
+		end)
+	`
+	future := rs.Pooler().Do(tarantool.NewEvalRequest(createBucket).
+		Args([]any{bucketID}).Context(ctx), pool.ModeRW)
+	_, err := future.Get()
+	future.Release()
+	require.NoError(t, err)
+}
+
+func TestRouter_SparseBucketBoundary(t *testing.T) {
+	// Keep this test sequential: the temporary bucket must be removed before
+	// parallel map/reduce tests check the cluster's total bucket count.
+	const maxBucketID uint64 = 99_999_999_999_999
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	router, err := vshardrouter.NewRouter(ctx, vshardrouter.Config{
+		TopologyProvider: static.NewProvider(topology),
+		DiscoveryMode:    vshardrouter.DiscoveryModeOnce,
+		TotalBucketCount: totalBucketCount + 1,
+		SparseBucketIDs:  true,
+		User:             username,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		for name := range router.RouteAll() {
+			for _, err := range router.RemoveReplicaset(ctx, name) {
+				require.NoError(t, err)
+			}
+		}
+	})
+
+	rs := router.RouteAll()["storage_1"]
+	require.NotNil(t, rs)
+	createPinnedTestBucket(t, ctx, rs, maxBucketID)
+	_, err = router.BucketSet(maxBucketID, "storage_1")
+	require.NoError(t, err)
+
+	response, err := router.CallRW(ctx, maxBucketID, "echo", []any{"boundary"}, vshardrouter.CallOpts{})
+	require.NoError(t, err)
+	values, err := response.Get()
+	require.NoError(t, err)
+	require.Equal(t, []any{"boundary"}, values)
+
+	for _, id := range []uint64{100_000_000_000_000, ^uint64(0)} {
+		_, err := router.CallRW(ctx, id, "echo", []any{"boundary"}, vshardrouter.CallOpts{})
+		require.ErrorContains(t, err, "out of range")
+	}
+}
+
 func TestRouter_Topology(t *testing.T) {
 	t.Parallel()
 

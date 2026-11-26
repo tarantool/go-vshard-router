@@ -179,6 +179,35 @@ func main() {
 }
 ```
 
+### Разреженные идентификаторы бакетов
+
+По умолчанию router использует массив маршрутов, а идентификаторы бакетов лежат
+в диапазоне `1..TotalBucketCount`. Для кластеров с непоследовательными ID включите
+`Config.SparseBucketIDs`:
+
+```go
+cfg.SparseBucketIDs = true
+cfg.TotalBucketCount = 2048 // Число бакетов во всём кластере, а не максимальный ID.
+```
+
+В этом режиме маршруты для `uint64` ID из диапазона `1..99_999_999_999_999`
+хранятся в конкурентной map. Передавайте в `Call` физический ID: он отправляется
+storage без изменений. Discovery использует те же ID и поддерживает несколько
+раздельных диапазонов в одном кластере.
+
+Верхняя граница нужна для совместимости со storage: Tarantool 2.x и 3.x
+декодируют беззнаковые целые MessagePack начиная с `100_000_000_000_000` как Lua
+`cdata`, а `bucket_stat` и `storage.call` в vshard требуют Lua `number`.
+См. [преобразование целых в Tarantool](https://github.com/tarantool/tarantool/blob/3.9.0/src/lua/utils.c#L596-L613)
+и [проверку типа в vshard](https://github.com/tarantool/vshard/blob/1.0.0/vshard/storage/init.lua#L1451).
+`Call`, `Route` и `BucketSet` отклоняют ID вне поддерживаемого диапазона;
+discovery пропускает такие ID в ответах storage.
+
+Вычисляйте ID алгоритмом вашего приложения. `BucketIDStrCRC32` по-прежнему
+возвращает ID из `1..TotalBucketCount` и не учитывает пользовательские диапазоны.
+Создавайте разреженные бакеты на стороне storage: `ClusterBootstrap` отклоняет
+этот режим. `MapCallRW` продолжает использовать фактическое общее число бакетов.
+
 ### Провайдеры
 
 <img align="center"  src="docs/static/providers.png" alt="topology">

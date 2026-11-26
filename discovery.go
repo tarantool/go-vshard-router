@@ -47,13 +47,13 @@ const (
 
 // Route get replicaset object by bucket identifier.
 func (r *Router) Route(ctx context.Context, bucketID uint64) (*Replicaset, error) {
-	if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		return nil, fmt.Errorf("bucket id is out of range: %d (total %d)", bucketID, r.cfg.TotalBucketCount)
+	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
+	if !isValidBucketID(bucketID, maxBucketID) {
+		return nil, fmt.Errorf("bucket id is out of range: %d (valid range 1..%d)", bucketID, maxBucketID)
 	}
 
-	routeMap := r.getRouteMap()
-
-	rs := routeMap[bucketID].Load()
+	rs := routeMap.load(bucketID)
 	if rs != nil {
 		nameToReplicasetRef := r.getNameToReplicaset()
 
@@ -158,6 +158,7 @@ func (r *Router) bucketSearchLegacy(ctx context.Context, bucketID uint64) (*Repl
 func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64) (*Replicaset, error) {
 	nameToReplicasetRef := r.getNameToReplicaset()
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
 
 	type rsFuture struct {
 		rs     *Replicaset
@@ -206,12 +207,20 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 		}
 
 		for _, bucketID := range resp.Buckets {
+			if !isValidBucketID(bucketID, maxBucketID) {
+				r.log().ErrorContext(ctx, "Ignoring out-of-range bucket ID",
+					"bucket_id", bucketID,
+					"total_bucket_count", r.cfg.TotalBucketCount,
+					"max_bucket_id", maxBucketID)
+				continue
+			}
+
 			if bucketID == bucketIDToFind {
 				// We found where bucketIDToFind is located
 				rs = rsFuture.rs
 			}
 
-			routeMap[bucketID].Store(rsFuture.rs)
+			routeMap.store(bucketID, rsFuture.rs)
 		}
 
 		if bucketIDWasFound := rs != nil; !bucketIDWasFound {
@@ -233,6 +242,7 @@ func (r *Router) bucketSearchBatched(ctx context.Context, bucketIDToFind uint64)
 // DiscoveryHandleBuckets arrange downloaded buckets to the route map so as they reference a given replicaset.
 func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buckets []uint64) {
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
 	removedFrom := make(map[string]int)
 
 	var newRsName string
@@ -241,15 +251,13 @@ func (r *Router) DiscoveryHandleBuckets(ctx context.Context, rs *Replicaset, buc
 	}
 
 	for _, bucketID := range buckets {
-		// We don't validate bucketID intentionally, because we can't return an error here using the current API.
-		// We can't silence this error too, the caller should know about invalid arguments.
-		// So the only way to inform the caller is to panic here,
-		// that should happen if bucketID is out of the array bounds.
-		// if bucketID < 1 || r.cfg.TotalBucketCount < bucketID {
-		// 	continue
-		// }
+		if !isValidBucketID(bucketID, maxBucketID) {
+			// Preserve the public API's panic on invalid input; this method has
+			// no error return. Network discovery validates responses separately.
+			panic(fmt.Sprintf("bucket id is out of range: %d (valid range 1..%d)", bucketID, maxBucketID))
+		}
 
-		oldRs := routeMap[bucketID].Swap(rs)
+		oldRs := routeMap.swap(bucketID, rs)
 
 		var oldRsName string
 		if oldRs != nil {
@@ -291,6 +299,7 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 	var errGr errgroup.Group
 
 	routeMap := r.getRouteMap()
+	maxBucketID := routeMap.maxBucketID()
 	nameToReplicasetRef := r.getNameToReplicaset()
 
 	for _, rs := range nameToReplicasetRef {
@@ -307,13 +316,15 @@ func (r *Router) DiscoveryAllBuckets(ctx context.Context) error {
 				}
 
 				for _, bucketID := range resp.Buckets {
-					if bucketID > r.cfg.TotalBucketCount {
-						r.log().ErrorContext(ctx, "Ignoring got bucketID is out of range",
-							"bucket_id", bucketID, "total_bucket_count", r.cfg.TotalBucketCount)
+					if !isValidBucketID(bucketID, maxBucketID) {
+						r.log().ErrorContext(ctx, "Ignoring out-of-range bucket ID",
+							"bucket_id", bucketID,
+							"total_bucket_count", r.cfg.TotalBucketCount,
+							"max_bucket_id", maxBucketID)
 						continue
 					}
 
-					routeMap[bucketID].Store(rs)
+					routeMap.store(bucketID, rs)
 				}
 
 				// There are no more buckets
