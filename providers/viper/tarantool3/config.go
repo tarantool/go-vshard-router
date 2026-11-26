@@ -5,7 +5,8 @@ package tarantool3
 // Config - configuration for all groups
 // based on https://www.tarantool.io/en/doc/latest/getting_started/vshard_quick/#step-4-defining-the-cluster-topology.
 type Config struct {
-	Groups Group `yaml:"groups"`
+	Sharding Sharding `yaml:"sharding"`
+	Groups   Group    `yaml:"groups"`
 }
 
 // Group is a structure for each group configuration
@@ -29,6 +30,10 @@ type App struct {
 // Sharding configuration
 type Sharding struct {
 	Roles []string `yaml:"roles"`
+	// Weight is the relative amount of data a replicaset stores. Tarantool
+	// accepts it globally, in a group or in a replicaset, and the most
+	// specific one wins; it defaults to 1.
+	Weight *float64 `yaml:"weight"`
 }
 
 // Replication configuration
@@ -39,6 +44,7 @@ type Replication struct {
 // Replicaset configuration
 type Replicaset struct {
 	Leader    string              `yaml:"leader"`
+	Sharding  Sharding            `yaml:"sharding"`
 	Instances map[string]Instance `yaml:"instances"`
 }
 

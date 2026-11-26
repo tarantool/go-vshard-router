@@ -18,7 +18,14 @@ func (cfg *Config) Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.Ins
 	m := make(map[vshardrouter.ReplicasetInfo][]vshardrouter.InstanceInfo)
 
 	for rsName, rs := range cfg.Groups.Storages.Replicasets {
-		rsInfo := vshardrouter.ReplicasetInfo{Name: rsName}
+		rsInfo := vshardrouter.ReplicasetInfo{
+			Name: rsName,
+			Weight: shardingWeight(
+				rs.Sharding.Weight,
+				cfg.Groups.Storages.Sharding.Weight,
+				cfg.Sharding.Weight,
+			),
+		}
 		instances := make([]vshardrouter.InstanceInfo, 0, len(rs.Instances))
 
 		for instanceName, instance := range rs.Instances {
@@ -32,4 +39,19 @@ func (cfg *Config) Convert() (map[vshardrouter.ReplicasetInfo][]vshardrouter.Ins
 	}
 
 	return m, nil
+}
+
+// defaultShardingWeight is Tarantool's default for sharding.weight.
+const defaultShardingWeight = 1
+
+// shardingWeight returns the first weight set, from the most specific scope
+// to the least specific one.
+func shardingWeight(weights ...*float64) float64 {
+	for _, weight := range weights {
+		if weight != nil {
+			return *weight
+		}
+	}
+
+	return defaultShardingWeight
 }

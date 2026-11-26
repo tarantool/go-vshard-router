@@ -39,6 +39,8 @@ groups:
               - uri: '127.0.0.1:3303'
       storage-b:
         leader: storage-b-001
+        sharding:
+          weight: 2
         instances:
           storage-b-001:
             iproto:
