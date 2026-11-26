@@ -313,12 +313,18 @@ func CalculateEtalonBalance(replicasets []Replicaset, bucketCount uint64) error 
 	return nil
 }
 
+// BucketsCount returns the number of buckets stored on any instance of the
+// replicaset, which may be a lagging replica.
 func (rs *Replicaset) BucketsCount(ctx context.Context) (uint64, error) {
+	return rs.bucketsCount(ctx, pool.ModeAny)
+}
+
+func (rs *Replicaset) bucketsCount(ctx context.Context, mode pool.Mode) (uint64, error) {
 	const bucketCountFnc = "vshard.storage.buckets_count"
 
 	var bucketCount uint64
 
-	fut := rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModeAny}, bucketCountFnc, nil)
+	fut := rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: mode}, bucketCountFnc, nil)
 	err := fut.GetTyped(&[]any{&bucketCount})
 	fut.Release()
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 
 	tarantool "github.com/tarantool/go-tarantool/v3"
+	"github.com/tarantool/go-tarantool/v3/pool"
 )
 
 var (
@@ -374,17 +376,24 @@ func (r *Router) BucketCount() uint64 {
 // -- Bootstrap
 // --------------------------------------------------------------------------------
 
-// ClusterBootstrap initializes the cluster by bootstrapping the necessary buckets
-// across the available replicasets. It checks the current state of each replicaset
-// and creates buckets if required. The function takes a context for managing
-// cancellation and deadlines, and a boolean parameter ifNotBootstrapped to control
-// error handling. If ifNotBootstrapped is true, the function will log any errors
-// encountered during the bootstrapping process but will not halt execution; instead,
-// it will return the last error encountered. If ifNotBootstrapped is false, any
-// error will result in an immediate return, ensuring that the operation either
-// succeeds fully or fails fast.
+// ClusterBootstrap creates TotalBucketCount buckets and distributes them over
+// the replicasets, as vshard.router.bootstrap does.
 //
-// Deprecated: use lua bootstrap now, go-router bootstrap now works invalid.
+// If any replicaset already holds buckets, the cluster is considered
+// bootstrapped: ClusterBootstrap returns a NON_EMPTY error, or nil when
+// ifNotBootstrapped is true. With ifNotBootstrapped it returns an error if the
+// replicasets hold fewer than TotalBucketCount buckets in total: an earlier
+// bootstrap stopped halfway and has to be finished manually.
+//
+// Buckets are split according to ReplicasetInfo.Weight. If no replicaset has a
+// weight set, all of them get equal shares, as vshard's default weight of 1
+// does.
+//
+// The emptiness check and the bucket creation are not atomic, so call
+// ClusterBootstrap from one place rather than from every instance of a service
+// at startup. Concurrent calls with the same topology compute the same bucket
+// layout and cannot put one bucket on two replicasets, but all of them except
+// one are likely to fail on duplicate bucket IDs, even with ifNotBootstrapped.
 func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) error {
 	if r.cfg.SparseBucketIDs {
 		return fmt.Errorf("cluster bootstrap is not supported for sparse bucket IDs")
@@ -392,39 +401,110 @@ func (r *Router) ClusterBootstrap(ctx context.Context, ifNotBootstrapped bool) e
 
 	nameToReplicasetRef := r.getNameToReplicaset()
 
-	rssToBootstrap := make([]Replicaset, 0, len(nameToReplicasetRef))
-	var lastErr error
-
-	for _, rs := range nameToReplicasetRef {
-		rssToBootstrap = append(rssToBootstrap, *rs)
+	if len(nameToReplicasetRef) == 0 {
+		return fmt.Errorf("no replicasets to bootstrap")
 	}
 
-	err := CalculateEtalonBalance(rssToBootstrap, r.cfg.TotalBucketCount)
-	if err != nil {
+	// Check that every replicaset is empty before bootstrapping. If at least one
+	// replicaset already holds buckets, the cluster was bootstrapped before.
+	var lastErr error
+	var bucketCount uint64
+
+	for name, rs := range nameToReplicasetRef {
+		// Ask the master, as vshard.router.bootstrap does: a lagging replica
+		// may not have the buckets yet and make the cluster look empty.
+		count, err := rs.bucketsCount(ctx, pool.ModeRW)
+		if err != nil {
+			err = fmt.Errorf("buckets_count on replicaset %s: %w", name, err)
+			if !ifNotBootstrapped {
+				return err
+			}
+			// As in vshard.router.bootstrap, one non-empty replicaset is enough
+			// to consider the cluster bootstrapped, so keep asking the others.
+			lastErr = err
+
+			continue
+		}
+
+		if count > 0 && !ifNotBootstrapped {
+			return newVShardErrorNonEmpty()
+		}
+
+		bucketCount += count
+	}
+
+	if bucketCount > 0 {
+		if lastErr != nil {
+			r.log().WarnContext(ctx, "cluster bootstrap skipped: buckets found, "+
+				"but not every replicaset answered to check that none is missing",
+				"error", lastErr)
+
+			return nil
+		}
+
+		// buckets_count includes buckets being moved, so the sum may exceed
+		// TotalBucketCount during rebalancing, but it never falls below it in a
+		// bootstrapped cluster. A smaller sum means an earlier bootstrap stopped
+		// halfway, and skipping it would leave the missing buckets unroutable.
+		if bucketCount < r.cfg.TotalBucketCount {
+			return fmt.Errorf("cluster is partially bootstrapped: found %d of %d buckets",
+				bucketCount, r.cfg.TotalBucketCount)
+		}
+
+		r.log().InfoContext(ctx, "cluster bootstrap skipped: cluster is already bootstrapped",
+			"bucket_count", bucketCount)
+
+		return nil
+	}
+
+	if lastErr != nil {
+		return lastErr
+	}
+
+	// nameToReplicasetRef is a map, so iterating it directly would make the bucket distribution non-deterministic
+	names := make([]string, 0, len(nameToReplicasetRef))
+	for name := range nameToReplicasetRef {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	rssToBootstrap := make([]Replicaset, 0, len(names))
+	weightsUnset := true
+	for _, name := range names {
+		rs := *nameToReplicasetRef[name]
+		weightsUnset = weightsUnset && rs.info.Weight == 0
+		rssToBootstrap = append(rssToBootstrap, rs)
+	}
+
+	// Topology providers do not fill Weight, so it is usually zero everywhere,
+	// and CalculateEtalonBalance would reject such a topology. vshard defaults
+	// a replicaset weight to 1; do the same when no weight is set at all, and
+	// keep the configured weights, zero ones included, otherwise. The slice
+	// holds copies, so the router's replicasets are not changed.
+	if weightsUnset {
+		for i := range rssToBootstrap {
+			rssToBootstrap[i].info.Weight = 1
+		}
+	}
+
+	if err := CalculateEtalonBalance(rssToBootstrap, r.cfg.TotalBucketCount); err != nil {
 		return err
 	}
 
 	bucketID := uint64(1)
 	for _, rs := range rssToBootstrap {
 		if rs.EtalonBucketCount > 0 {
-			err = rs.BucketForceCreate(ctx, bucketID, rs.EtalonBucketCount)
-			if err != nil {
-				if ifNotBootstrapped {
-					lastErr = err
-				} else {
-					return err
-				}
-			} else {
-				nextBucketID := bucketID + rs.EtalonBucketCount
-				r.log().InfoContext(ctx, "Buckets bootstrapped", "from", bucketID, "to", nextBucketID-1, "replicaset", rs.info.Name)
-				bucketID = nextBucketID
+			if err := rs.BucketForceCreate(ctx, bucketID, rs.EtalonBucketCount); err != nil {
+				return err
 			}
+
+			nextBucketID := bucketID + rs.EtalonBucketCount
+			r.log().InfoContext(ctx, "Buckets are bootstrapped", "replicaset", rs.String(), "from", bucketID, "to", nextBucketID-1)
+			bucketID = nextBucketID
 		}
 	}
 
-	if lastErr != nil {
-		return lastErr
-	}
+	r.log().InfoContext(ctx, "cluster bootstrap completed")
 
 	return nil
 }
