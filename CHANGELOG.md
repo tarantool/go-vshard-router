@@ -40,6 +40,10 @@ CHANGES:
 * Router.Call: retry on VShardErrNameTransferIsInProgress error as in the `vshard` module (#75).
 
 BUG FIXES:
+* The default `BucketsSearchLegacy` search and `Replicaset.BucketStat` call
+  `vshard.storage.bucket_stat` on the master, as `vshard.router` does. They required a
+  replica before, so a bucket on a replicaset without one could not be found, and a lagging
+  replica could still report a bucket that had already moved away.
 * `RouterMapCallRW` sends the storage reference timeout in seconds instead of
   nanoseconds, so unused references left after a canceled call expire within the intended
   timeout (#90).

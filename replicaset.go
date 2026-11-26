@@ -83,7 +83,10 @@ func (rs *Replicaset) BucketStat(ctx context.Context, bucketID uint64) (BucketSt
 func (rs *Replicaset) bucketStatAsync(ctx context.Context, bucketID uint64) tarantool.Future {
 	const bucketStatFnc = "vshard.storage.bucket_stat"
 
-	return rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModeRO}, bucketStatFnc, []any{bucketID})
+	// Ask the master, as vshard.router does with callrw: a replica may lag
+	// behind and still report a bucket that has already moved away, and a
+	// replicaset may have no replica at all.
+	return rs.CallAsync(ctx, ReplicasetCallOpts{PoolMode: pool.ModeRW}, bucketStatFnc, []any{bucketID})
 }
 
 type vshardStorageBucketStatResponseProto struct {
