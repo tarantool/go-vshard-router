@@ -1,6 +1,10 @@
 ## Unreleased
 
 CHANGES:
+* `BucketIDStrCRC32` computes CRC-32C with the standard `hash/crc32`, which uses the CPU's
+  CRC32 instruction when there is one: about 2 times faster for a 10-byte key and 25 times
+  for a 1 KiB one. Bucket IDs do not change. The `github.com/snksoft/crc` dependency is
+  removed (#83).
 * Bump go-tarantool from v2.4.2 to v3.0.2.
 * Logging goes through `*slog.Logger`: `Config.Logger` replaces `Config.Loggerf`, and the
   `LogfProvider` interface, `StdoutLoggerf` and the `providers/slog` adapter are removed.
